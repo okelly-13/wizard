@@ -1,0 +1,1182 @@
+<style>
+  /* ============================================================
+     ANALYTICS-ONLY STYLES
+     ============================================================ */
+  :root, [data-theme="light"] {
+    --chart-line: #5B47E0;
+    --chart-fill: rgba(91, 71, 224, 0.12);
+    --chart-grid: rgba(0, 0, 0, 0.05);
+    --chart-tick: #6B7588;
+    --chart-red: #F5365C;
+    --chart-green: #14C18C;
+    --chart-orange: #FFA800;
+    --chart-blue: #2563EB;
+    --chart-gray: #9CA3AF;
+  }
+  [data-theme="dark"] {
+    --chart-line: #8B7FFF;
+    --chart-fill: rgba(139, 127, 255, 0.18);
+    --chart-grid: rgba(255, 255, 255, 0.06);
+    --chart-tick: #A8B0C5;
+    --chart-red: #FF5470;
+    --chart-green: #14C18C;
+    --chart-orange: #FFA800;
+    --chart-blue: #5B8DEF;
+    --chart-gray: #6B7588;
+  }
+
+  .analytics-empty { padding: 30px; text-align: center; color: var(--text-muted); font-size: 12px; }
+
+  .chart-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+    padding: 0 20px 20px;
+  }
+  @media (max-width: 900px) { .chart-grid { grid-template-columns: 1fr; } }
+
+  .chart-card {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius-md); padding: 16px 20px;
+    display: flex; flex-direction: column;
+  }
+  .chart-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .chart-card-title { font-size: 13px; font-weight: 700; color: var(--text-primary); }
+  .chart-card-sub   { font-size: 11px; color: var(--text-secondary); }
+  .chart-canvas-wrap { position: relative; flex: 1; min-height: 220px; }
+
+  /* Phase failure bars */
+  .phase-bar-row {
+    display: grid; grid-template-columns: 130px 1fr 70px;
+    align-items: center; gap: 10px; margin-bottom: 8px;
+    font-size: 12px;
+  }
+  .phase-bar-track {
+    height: 22px; background: var(--bg-app);
+    border-radius: 6px; overflow: hidden; position: relative;
+    border: 1px solid var(--border);
+  }
+  .phase-bar-pass {
+    position: absolute; left: 0; top: 0; bottom: 0;
+    background: var(--chart-green); transition: width 400ms var(--ease);
+  }
+  .phase-bar-fail {
+    position: absolute; right: 0; top: 0; bottom: 0;
+    background: var(--chart-red); transition: width 400ms var(--ease);
+  }
+  .phase-bar-label { color: var(--text-primary); font-weight: 600; }
+  .phase-bar-rate  { font-weight: 700; font-size: 12px; text-align: right; }
+  .phase-bar-rate.fail-high { color: var(--chart-red); }
+  .phase-bar-rate.fail-mid  { color: var(--chart-orange); }
+  .phase-bar-rate.fail-low  { color: var(--chart-green); }
+
+  /* Systemic vs Human donut legend */
+  .donut-legend { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+  .donut-legend-row {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px;
+  }
+  .donut-legend-dot { width: 10px; height: 10px; border-radius: 3px; }
+  .donut-legend-name { flex: 1; color: var(--text-primary); }
+  .donut-legend-val  { font-weight: 700; color: var(--text-secondary); }
+
+  /* Drill-down text columns */
+  .table-cell-trunc {
+    max-width: 280px; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; display: inline-block; vertical-align: middle;
+  }
+
+  /* Search box */
+  .analytics-search {
+    flex: 1; min-width: 180px; padding: 7px 12px;
+    border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+    background: var(--bg-card); color: var(--text-primary);
+    font-size: 12px; font-family: inherit;
+  }
+  .analytics-search:focus {
+    outline: none; border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(91,71,224,0.15);
+  }
+
+  /* Date-range targeting chip */
+  .date-target-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 8px; border-radius: var(--radius-full);
+    background: var(--bg-card); border: 1px solid var(--border-strong);
+    font-size: 11px; color: var(--text-secondary);
+  }
+  .date-target-chip select {
+    border: none; background: transparent;
+    font-size: 11px; font-weight: 600; color: var(--accent);
+    cursor: pointer; outline: none;
+  }
+
+  /* Action pills (table) — extra for review */
+  .text-link {
+    color: var(--accent); text-decoration: none; font-weight: 600;
+    display: inline-flex; align-items: center; gap: 3px;
+  }
+  .text-link:hover { text-decoration: underline; }
+  .text-link.disabled { color: var(--text-muted); cursor: not-allowed; }
+</style>
+
+<!-- ============================================================
+     RCA RESULTS ANALYTICS VIEW
+     ============================================================ -->
+<div class="card" id="rcaAnalyticsCard">
+  <div class="card-header">
+    <div>
+      <h2 class="card-title">RCA Results Analytics</h2>
+      <div class="card-subtitle" id="rcaAnalyticsSubtitle">Loading…</div>
+    </div>
+    <div class="flex gap-2">
+      <button class="btn btn-ghost btn-sm" onclick="window.exportRcaCsv && window.exportRcaCsv()" title="Export current view to CSV">⬇ CSV</button>
+      <button class="btn btn-ghost btn-sm" onclick="window.loadRcaAnalytics && window.loadRcaAnalytics()">↻ Refresh</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════ FILTER BAR ═══════════════ -->
+  <div class="analytics-filter-bar">
+    <!-- Date range with target selector -->
+    <div class="filter-group" style="flex:1.4; min-width:260px;">
+      <label>Date Range <span class="text-muted" style="text-transform:none;">·</span>
+        <span class="date-target-chip">
+          <span style="font-size:10px; color:var(--text-muted);">on</span>
+          <select id="rcaFilterDateField" onchange="window.loadRcaAnalytics && window.loadRcaAnalytics()">
+            <option value="timestamp">Timestamp</option>
+            <option value="reviewDate">Review Date</option>
+            <option value="workDate">Work Date</option>
+          </select>
+        </span>
+      </label>
+      <div class="flex gap-1">
+        <input type="date" id="rcaFilterFrom" onchange="window.loadRcaAnalytics && window.loadRcaAnalytics()">
+        <span style="align-self:center; color:var(--text-muted);">→</span>
+        <input type="date" id="rcaFilterTo" onchange="window.loadRcaAnalytics && window.loadRcaAnalytics()">
+      </div>
+    </div>
+
+    <!-- Free-text search -->
+    <div class="filter-group" style="flex:1.2; min-width:200px;">
+      <label>Search comments / details</label>
+      <input type="search" class="analytics-search" id="rcaFilterSearch" placeholder="e.g., money laundering, OSINT fail…">
+    </div>
+
+    <!-- Categorical filters -->
+    <div class="filter-group">
+      <label>Conductor</label>
+      <select id="rcaFilterConductor"><option value="">All</option></select>
+    </div>
+    <div class="filter-group">
+      <label>QC Reviewer</label>
+      <select id="rcaFilterQcReviewer"><option value="">All</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Analyst</label>
+      <select id="rcaFilterAnalyst"><option value="">All</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Team</label>
+      <select id="rcaFilterTeam"><option value="">All</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Agency</label>
+      <select id="rcaFilterAgency"><option value="">All</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Product</label>
+      <select id="rcaFilterProduct"><option value="">All</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Country</label>
+      <select id="rcaFilterCountry"><option value="">All</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Authority</label>
+      <select id="rcaFilterAuthority"><option value="">All</option></select>
+    </div>
+    <div class="filter-group">
+      <label>UAR Origin</label>
+      <select id="rcaFilterOrigin"><option value="">All</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Task Type</label>
+      <select id="rcaFilterTaskType"><option value="">All</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Error Source</label>
+      <select id="rcaFilterErrorSource"><option value="">All</option></select>
+    </div>
+    <div class="filter-group">
+      <label>QC Agree</label>
+      <select id="rcaFilterQcAgree">
+        <option value="">All</option>
+        <option value="Yes">Yes (Agree)</option>
+        <option value="No">No (Disagree)</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Defect</label>
+      <select id="rcaFilterDefect">
+        <option value="">All</option>
+        <option value="Critical">Critical</option>
+        <option value="None">None</option>
+        <option value="Unknown">Unknown</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Typology</label>
+      <select id="rcaFilterTypology"><option value="">All</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Risk Tag</label>
+      <select id="rcaFilterTag"><option value="">All</option></select>
+    </div>
+
+    <!-- Boolean flag filters -->
+    <div class="filter-group">
+      <label>Flagged to TL</label>
+      <select id="rcaFilterFlagToTL">
+        <option value="">Either</option><option value="true">Yes</option><option value="false">No</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>To be Appealed</label>
+      <select id="rcaFilterToBeAppealed">
+        <option value="">Either</option><option value="true">Yes</option><option value="false">No</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Fail Accepted</label>
+      <select id="rcaFilterFailAccepted">
+        <option value="">Either</option><option value="true">Yes</option><option value="false">No</option>
+      </select>
+    </div>
+
+    <div class="filter-actions">
+      <button class="btn btn-secondary btn-sm" id="rcaApplyBtn">Apply</button>
+      <button class="btn btn-ghost btn-sm" id="rcaClearBtn">Clear</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════ KPI CARDS ═══════════════ -->
+  <div class="rca-kpi-grid" id="rcaKpiGrid"></div>
+
+  <!-- ═══════════════ TREND CHART ═══════════════ -->
+  <div style="padding: 0 20px 20px;">
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <div>
+          <div class="chart-card-title">📈 Defect Volume Over Time</div>
+          <div class="chart-card-sub" id="trendSubtitle">Daily / Weekly / Monthly</div>
+        </div>
+        <div class="trend-controls" id="trendControls">
+          <button data-trend="daily"   class="active" type="button">Daily</button>
+          <button data-trend="weekly"  type="button">Weekly</button>
+          <button data-trend="monthly" type="button">Monthly</button>
+        </div>
+      </div>
+      <div class="chart-canvas-wrap"><canvas id="rcaTrendChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ CYCLE TIME TREND ═══════════════ -->
+  <div class="chart-grid">
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <div>
+          <div class="chart-card-title">⏱ Cycle Time Trends (Weekly)</div>
+          <div class="chart-card-sub">Work→QC vs QC→RCA average days</div>
+        </div>
+      </div>
+      <div class="chart-canvas-wrap"><canvas id="rcaCycleChart"></canvas></div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <div>
+          <div class="chart-card-title">🎯 Phase Failure Breakdown</div>
+          <div class="chart-card-sub">% of "No" responses per investigation phase</div>
+        </div>
+      </div>
+      <div id="rcaPhaseFailure"></div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ TYPOLOGIES, TAGS, SYSTEMIC ═══════════════ -->
+  <div class="chart-grid">
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <div>
+          <div class="chart-card-title">🏷 Top Typologies</div>
+          <div class="chart-card-sub">Across all RCAs in range</div>
+        </div>
+      </div>
+      <div id="rcaTopTypologies"></div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <div>
+          <div class="chart-card-title">🚩 Top Risk Tags</div>
+          <div class="chart-card-sub">Across all RCAs in range</div>
+        </div>
+      </div>
+      <div id="rcaTopRiskTags"></div>
+    </div>
+  </div>
+
+  <div class="chart-grid">
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <div>
+          <div class="chart-card-title">⚖️ Systemic vs Human Error</div>
+          <div class="chart-card-sub">Error Source × System Process Fail</div>
+        </div>
+      </div>
+      <div class="chart-canvas-wrap" style="display:flex; align-items:center; gap: 16px;">
+        <div style="flex: 0 0 180px;"><canvas id="rcaSystemicChart"></canvas></div>
+        <div class="donut-legend" id="rcaSystemicLegend" style="flex:1;"></div>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <div>
+          <div class="chart-card-title">🤝 Agreement Rate</div>
+          <div class="chart-card-sub">% of RCAs where reviewer agreed with QC</div>
+        </div>
+      </div>
+      <div class="chart-canvas-wrap"><canvas id="rcaAgreementChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ EXISTING BREAKDOWNS ═══════════════ -->
+  <div class="chart-grid">
+    <div class="chart-card">
+      <div class="chart-card-title" style="margin-bottom: 10px;">By Defect Type</div>
+      <div id="rcaDefectBreakdown"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-card-title" style="margin-bottom: 10px;">🏆 Top RCA Conductors</div>
+      <div id="rcaTopConductors"></div>
+    </div>
+  </div>
+
+  <div class="chart-grid">
+    <div class="chart-card">
+      <div class="chart-card-title" style="margin-bottom: 10px;">By Team</div>
+      <div id="rcaTeamBreakdown"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-card-title" style="margin-bottom: 10px;">🏆 Top QC Reviewers</div>
+      <div id="rcaTopQcReviewers"></div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ DRILL-DOWN TABLE ═══════════════ -->
+  <div style="padding: 0 20px 20px;">
+    <div class="card-header" style="padding: 0 0 12px;">
+      <h3 class="card-title" style="font-size: 14px;">📋 Drill-down · <span id="rcaTableCount">0</span> rows</h3>
+      <div class="text-sm text-muted">Hover text cells to see full content · click column headers would require server sort (TODO)</div>
+    </div>
+    <div class="table-scroll">
+      <table class="data-table rca-table">
+        <thead>
+          <tr>
+            <th>Timestamp</th>
+            <th>Case ID</th>
+            <th>Defect</th>
+            <th>Product</th>
+            <th>Analyst</th>
+            <th>QC Reviewer</th>
+            <th>Error Source</th>
+            <th>Score</th>
+            <th>Flags</th>
+            <th>Links</th>
+            <th>Cycle (d)</th>
+            <th>Comments</th>
+            <th>Sys/Proc Details</th>
+            <th>Suggested Update</th>
+          </tr>
+        </thead>
+        <tbody id="rcaTableBody"></tbody>
+      </table>
+    </div>
+    <div class="pagination">
+      <div class="pagination-info" id="rcaPaginationInfo">—</div>
+      <div class="pagination-controls" id="rcaPaginationControls"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  let rcaAnalyticsData = null;
+  let charts = { trend: null, cycle: null, systemic: null, agreement: null,
+                 defectTrend: null, pareto: null, scatter: null, cycleHist: null };
+  let rcaTrendMode  = 'daily';
+  let rcaTablePage  = 1;
+  const RCA_PAGE_SIZE = 25;
+  let rcaFilters    = {};
+  let _rcaDebounce  = null;
+  let actionCart = [];
+
+  window.loadRcaAnalytics = loadRcaAnalytics;
+  window.clearRcaFilters  = clearRcaFilters;
+  window.exportRcaCsv     = exportRcaCsv;
+  window.quickFilterBy    = quickFilterBy;
+  window.loadRcaTable       = loadRcaTable;
+  window.onRcaTableLoaded   = onRcaTableLoaded;
+  window.getRcaFiltersFromUi = getRcaFiltersFromUi;
+  window.toggleActionDrawer = toggleActionDrawer;
+  window.flagInsight = flagInsight;
+  window.removeActionItem = removeActionItem;
+  window.submitActionItem = submitActionItem;
+  window.pushAllToSheet = pushAllToSheet;
+  window.exportJiraCsv = exportJiraCsv;
+  window.filterByMonth = filterByMonth;
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const $ = (id) => document.getElementById(id);
+
+    document.querySelectorAll('#trendControls button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const mode = btn.dataset.trend;
+        if (!mode) return;
+        rcaTrendMode = mode;
+        document.querySelectorAll('#trendControls button').forEach(b => b.classList.toggle('active', b === btn));
+        if (rcaAnalyticsData) renderTrendChart(rcaAnalyticsData);
+      });
+    });
+
+    $('rcaApplyBtn')?.addEventListener('click', loadRcaAnalytics);
+    $('rcaClearBtn')?.addEventListener('click', clearRcaFilters);
+
+    $('rcaFilterSearch')?.addEventListener('input', () => {
+      clearTimeout(_rcaDebounce);
+      _rcaDebounce = setTimeout(loadRcaAnalytics, 350);
+    });
+
+    ['rcaFilterFrom','rcaFilterTo','rcaFilterDateField'].forEach(id => {
+      $(id)?.addEventListener('change', loadRcaAnalytics);
+    });
+  });
+
+  function loadRcaAnalytics() {
+    clearTimeout(_rcaDebounce);
+    _rcaDebounce = setTimeout(_loadRcaAnalyticsNow, 80);
+  }
+
+  function _loadRcaAnalyticsNow() {
+    setConn('busy', 'Loading analytics…');
+    rcaFilters = getRcaFiltersFromUi();
+
+    google.script.run
+      .withSuccessHandler(onRcaAnalyticsLoaded)
+      .withFailureHandler(err => {
+        setConn('offline', 'Error');
+        showToast({ title: 'Analytics error', description: (err && err.message) || String(err), type: 'error' });
+      })
+      .getRcaAnalytics(rcaFilters);
+  }
+
+  function onRcaAnalyticsLoaded(resp) {
+    if (!resp.success) {
+      setConn('offline', 'Error');
+      showToast({ title: 'Failed', description: resp.error, type: 'error' });
+      return;
+    }
+    rcaAnalyticsData = resp.analytics;
+    setConn('online', 'Ready');
+
+    document.getElementById('rcaAnalyticsSubtitle').textContent =
+      `${resp.total.toLocaleString()} RCAs in range · ${rcaAnalyticsData.thisWeek} this week · ${rcaAnalyticsData.thisMonth} this month`;
+
+    populateFilterDropdowns(rcaAnalyticsData);
+    renderKpis(rcaAnalyticsData);
+    renderTrendChart(rcaAnalyticsData);
+    renderCycleChart(rcaAnalyticsData);
+    renderPhaseFailure(rcaAnalyticsData);
+    renderTypologies(rcaAnalyticsData);
+    renderRiskTags(rcaAnalyticsData);
+    renderSystemicChart(rcaAnalyticsData);
+    renderAgreementChart(rcaAnalyticsData);
+    renderBreakdowns(rcaAnalyticsData);
+
+    renderDefectTrendChart(rcaAnalyticsData);
+    renderParetoChart(rcaAnalyticsData);
+    renderScatterChart(rcaAnalyticsData);
+    renderCycleHistogram(rcaAnalyticsData);
+    renderPhaseHeatmap(rcaAnalyticsData);
+
+    loadRcaTable(1);
+  }
+
+  function getRcaFiltersFromUi() {
+    const v = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
+    const bool = (id) => {
+      const x = v(id);
+      if (x === '') return undefined;
+      return x === 'true';
+    };
+    return {
+      dateField:    v('rcaFilterDateField') || 'timestamp',
+      dateFrom:     v('rcaFilterFrom'),
+      dateTo:       v('rcaFilterTo'),
+      search:       v('rcaFilterSearch'),
+      conductor:    v('rcaFilterConductor'),
+      qcReviewer:   v('rcaFilterQcReviewer'),
+      analyst:      v('rcaFilterAnalyst'),
+      team:         v('rcaFilterTeam'),
+      agency:       v('rcaFilterAgency'),
+      product:      v('rcaFilterProduct'),
+      country:      v('rcaFilterCountry'),
+      authority:    v('rcaFilterAuthority'),
+      origin:       v('rcaFilterOrigin'),
+      taskType:     v('rcaFilterTaskType'),
+      errorSource:  v('rcaFilterErrorSource'),
+      rcaAgree:     v('rcaFilterQcAgree'),
+      defect:       v('rcaFilterDefect'),
+      typology:     v('rcaFilterTypology'),
+      tag:          v('rcaFilterTag'),
+      flagToTL:     bool('rcaFilterFlagToTL'),
+      toBeAppealed: bool('rcaFilterToBeAppealed'),
+      failAccepted: bool('rcaFilterFailAccepted')
+    };
+  }
+
+  function clearRcaFilters() {
+    ['rcaFilterFrom','rcaFilterTo','rcaFilterDateField','rcaFilterSearch',
+     'rcaFilterConductor','rcaFilterQcReviewer','rcaFilterAnalyst',
+     'rcaFilterTeam','rcaFilterAgency','rcaFilterProduct','rcaFilterCountry',
+     'rcaFilterAuthority','rcaFilterOrigin','rcaFilterTaskType',
+     'rcaFilterErrorSource','rcaFilterQcAgree','rcaFilterDefect',
+     'rcaFilterTypology','rcaFilterTag','rcaFilterFlagToTL',
+     'rcaFilterToBeAppealed','rcaFilterFailAccepted']
+      .forEach(id => { const el = document.getElementById(id); if (el) el.value = el.tagName === 'SELECT' ? '' : ''; });
+    loadRcaAnalytics();
+  }
+
+  function populateFilterDropdowns(a) {
+    const fill = (id, obj) => {
+      const sel = document.getElementById(id); if (!sel) return;
+      const cur = sel.value;
+      sel.innerHTML = '<option value="">All</option>' +
+        Object.keys(obj || {}).sort().map(k =>
+          `<option value="${escapeHtml(k)}">${escapeHtml(k)} (${obj[k]})</option>`
+        ).join('');
+      sel.value = cur;
+    };
+    fill('rcaFilterConductor',  a.byConductor);
+    fill('rcaFilterQcReviewer', a.byQcReviewer);
+    fill('rcaFilterAnalyst',    a.byAnalyst);
+    fill('rcaFilterTeam',       a.byTeam);
+    fill('rcaFilterAgency',     a.byAgency);
+    fill('rcaFilterProduct',    a.byProduct);
+    fill('rcaFilterCountry',    a.byCountry);
+    fill('rcaFilterAuthority',  a.byAuthority);
+    fill('rcaFilterOrigin',     a.byOrigin);
+    fill('rcaFilterTaskType',   a.byTaskType);
+    fill('rcaFilterErrorSource',a.byErrorSource);
+    fill('rcaFilterTypology',   a.topTypologies);
+    fill('rcaFilterTag',        a.topRiskTags);
+  }
+
+  function renderKpis(a) {
+    const kpis = [
+      { label: 'Total RCAs',          value: a.total.toLocaleString(),          sub: 'cases in range',  kind: '' },
+      { label: 'Avg Defect Score',    value: (a.avgDefectScore || 0).toFixed(2),sub: 'higher = more defects', kind: a.avgDefectScore > 3 ? 'critical' : a.avgDefectScore > 1 ? 'warn' : 'success' },
+      { label: 'Agreement Rate',      value: (a.agreementRate || 0) + '%',      sub: `${a.agreementBreakdown.yes} yes / ${a.agreementBreakdown.no} no`, kind: a.agreementRate >= 70 ? 'success' : a.agreementRate >= 50 ? 'warn' : 'critical' },
+      { label: 'Critical Rate',       value: (a.criticalRate || 0) + '%',       sub: `${a.criticalCount} critical`, kind: 'critical' },
+      { label: 'Avg Work→QC',         value: (a.cycleTime.avgWorkToQc || 0).toFixed(1) + 'd', sub: 'analyst lag',  kind: a.cycleTime.avgWorkToQc > 7 ? 'warn' : '' },
+      { label: 'Avg QC→RCA',          value: (a.cycleTime.avgQcToRca || 0).toFixed(1) + 'd', sub: 'feedback lag', kind: a.cycleTime.avgQcToRca > 7 ? 'warn' : '' },
+      { label: 'Flag Rate',           value: (a.flagRate || 0) + '%',           sub: `${a.flagged.flagToTL} flagged`, kind: 'warn' },
+      { label: 'Appeals',             value: (a.appealRate || 0) + '%',         sub: `${a.flagged.toBeAppealed} appealed`, kind: 'warn' }
+    ];
+    document.getElementById('rcaKpiGrid').innerHTML = kpis.map(k => `
+      <div class="kpi-card ${k.kind ? 'kpi-' + k.kind : ''}" title="${escapeHtml(k.sub)}">
+        <div class="kpi-label">${escapeHtml(k.label)}</div>
+        <div class="kpi-value">${k.value}</div>
+        <div class="kpi-sub">${escapeHtml(k.sub)}</div>
+      </div>
+    `).join('');
+  }
+
+  const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const destroyChart = (key) => { if (charts[key]) { charts[key].destroy(); charts[key] = null; } };
+
+  function renderTrendChart(a) {
+    const canvas = document.getElementById('rcaTrendChart');
+    if (!canvas || typeof Chart === 'undefined') return;
+    destroyChart('trend');
+    let data, label;
+    if (rcaTrendMode === 'weekly')        { data = a.trendWeekly;  label = 'RCAs per week'; }
+    else if (rcaTrendMode === 'monthly')  { data = a.trendMonthly; label = 'RCAs per month'; }
+    else                                  { data = a.trendDaily;   label = 'RCAs per day'; }
+
+    const labels = data.map(d => rcaTrendMode === 'daily' ? d.date : (d.week || d.month));
+    const counts = data.map(d => d.count);
+
+    charts.trend = new Chart(canvas, {
+      type: 'line',
+      data: { labels, datasets: [{
+        label, data: counts,
+        borderColor: cssVar('--chart-line'),
+        backgroundColor: cssVar('--chart-fill'),
+        fill: true, tension: 0.35,
+        pointBackgroundColor: cssVar('--chart-line'),
+        pointRadius: counts.length > 60 ? 0 : 3,
+        pointHoverRadius: 5, borderWidth: 2
+      }]},
+      options: chartBaseOpts({ noData: counts.length === 0, noDataMsg: 'No data in selected range' })
+    });
+  }
+
+  function renderCycleChart(a) {
+    const canvas = document.getElementById('rcaCycleChart');
+    if (!canvas || typeof Chart === 'undefined') return;
+    destroyChart('cycle');
+    const data = a.cycleTimeTrendWeekly || [];
+    const labels = data.map(d => d.week);
+    const w2q    = data.map(d => d.avgWorkToQc);
+    const q2r    = data.map(d => d.avgQcToRca);
+
+    charts.cycle = new Chart(canvas, {
+      type: 'line',
+      data: { labels, datasets: [
+        { label: 'Work→QC', data: w2q, borderColor: cssVar('--chart-blue'), backgroundColor: 'transparent', tension: 0.3, pointRadius: 3, borderWidth: 2 },
+        { label: 'QC→RCA',  data: q2r, borderColor: cssVar('--chart-orange'), backgroundColor: 'transparent', tension: 0.3, pointRadius: 3, borderWidth: 2 }
+      ]},
+      options: chartBaseOpts({ yLabel: 'days', noData: data.length === 0 })
+    });
+  }
+
+  function renderPhaseFailure(a) {
+    const order = [
+      { key: 'p2Baseline',   label: 'P2 Baseline',   tip: 'Did analyst pass Baseline Checks?' },
+      { key: 'p2Osint',      label: 'P2 OSINT',      tip: 'Did analyst pass OSINT Checks?' },
+      { key: 'p3Baseline',   label: 'P3 Txn Baseline', tip: 'Did analyst pass Transaction Baseline?' },
+      { key: 'p3Module',     label: 'P3 Module',     tip: 'Did analyst pass module checks?' },
+      { key: 'p4ShortFull',  label: 'P4 Short/Full', tip: 'Correct Full vs Short identification?' },
+      { key: 'p4CorrectAll', label: 'P4 AU Outcomes',tip: 'Correct outcome on all associates?' },
+      { key: 'p5Decision',   label: 'P5 Decision',   tip: 'Correct overall decision?' }
+    ];
+    const ph = a.phaseFailure || {};
+    const html = order.map(o => {
+      const v = ph[o.key] || { pass: 0, fail: 0, total: 0, failRate: 0 };
+      const passPct = v.total ? (v.pass / v.total) * 100 : 0;
+      const failPct = v.total ? (v.fail / v.total) * 100 : 0;
+      const rateCls = v.failRate > 30 ? 'fail-high' : v.failRate > 15 ? 'fail-mid' : 'fail-low';
+      return `<div class="phase-bar-row" title="${escapeHtml(o.tip)} · ${v.pass} pass, ${v.fail} fail">
+        <div class="phase-bar-label">${escapeHtml(o.label)}</div>
+        <div class="phase-bar-track">
+          <div class="phase-bar-pass" style="width:${passPct}%"></div>
+          <div class="phase-bar-fail" style="width:${failPct}%"></div>
+        </div>
+        <div class="phase-bar-rate ${rateCls}">${v.failRate}%</div>
+      </div>`;
+    }).join('');
+    document.getElementById('rcaPhaseFailure').innerHTML = html;
+  }
+
+  function renderTypologies(a) { document.getElementById('rcaTopTypologies').innerHTML = _barList(a.topTypologies, null, 10); }
+  function renderRiskTags(a)   { document.getElementById('rcaTopRiskTags').innerHTML   = _barList(a.topRiskTags, null, 10); }
+
+  function renderSystemicChart(a) {
+    const canvas = document.getElementById('rcaSystemicChart');
+    const legend = document.getElementById('rcaSystemicLegend');
+    if (!canvas || typeof Chart === 'undefined') return;
+    destroyChart('systemic');
+
+    const svh = a.systemicVsHuman || {};
+    const labels = ['Human Only', 'System Only', 'Both', 'Neither', 'Unknown'];
+    const keys   = ['humanOnly', 'systemOnly', 'both', 'neither', 'unknown'];
+    const data   = keys.map(k => svh[k] || 0);
+    const colors = [cssVar('--chart-orange'), cssVar('--chart-blue'), cssVar('--chart-red'), cssVar('--chart-gray'), cssVar('--chart-gray')];
+
+    charts.systemic = new Chart(canvas, {
+      type: 'doughnut',
+      data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 2, borderColor: cssVar('--bg-card') || '#fff' }]},
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: '60%',
+        plugins: { legend: { display: false }, tooltip: { enabled: true } }
+      }
+    });
+
+    const total = data.reduce((a, b) => a + b, 0);
+    legend.innerHTML = labels.map((l, i) => `
+      <div class="donut-legend-row">
+        <div class="donut-legend-dot" style="background:${colors[i]}"></div>
+        <div class="donut-legend-name">${l}</div>
+        <div class="donut-legend-val">${data[i].toLocaleString()} <span style="color:var(--text-muted); font-weight:400;">(${total ? Math.round(data[i] / total * 100) : 0}%)</span></div>
+      </div>
+    `).join('');
+  }
+
+  function renderAgreementChart(a) {
+    const canvas = document.getElementById('rcaAgreementChart');
+    if (!canvas || typeof Chart === 'undefined') return;
+    destroyChart('agreement');
+
+    const ab = a.agreementBreakdown || { yes: 0, no: 0, other: 0 };
+    charts.agreement = new Chart(canvas, {
+      type: 'doughnut',
+      data: {
+        labels: ['Yes (Agree)', 'No (Disagree)', 'Other'],
+        datasets: [{
+          data: [ab.yes, ab.no, ab.other],
+          backgroundColor: [cssVar('--chart-green'), cssVar('--chart-red'), cssVar('--chart-gray')],
+          borderWidth: 2, borderColor: cssVar('--bg-card') || '#fff'
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: '65%',
+        plugins: {
+          legend: { position: 'right', labels: { color: cssVar('--chart-tick'), font: { size: 11 } } },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const v = ctx.parsed;
+                const t = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                return `${ctx.label}: ${v.toLocaleString()} (${t ? Math.round(v / t * 100) : 0}%)`;
+              }
+            }
+          }
+        }
+      }
+    });
+  }
+
+  function renderBreakdowns(a) {
+    document.getElementById('rcaDefectBreakdown').innerHTML  = _barList(a.byDefect, ['Critical', 'None', 'Unknown']);
+    document.getElementById('rcaTeamBreakdown').innerHTML    = _barList(a.byTeam);
+    document.getElementById('rcaTopConductors').innerHTML    = _leaderboard(a.topConductors);
+    document.getElementById('rcaTopQcReviewers').innerHTML   = _leaderboard(a.topQcReviewers);
+  }
+
+  function renderDefectTrendChart(a) {
+    const canvas = document.getElementById('rcaDefectTrendChart');
+    if (!canvas || typeof Chart === 'undefined') return;
+    destroyChart('defectTrend');
+    const data = a.trendDailyByDefect || [];
+    const labels = data.map(d => d.date);
+    const mk = (key, color) => ({ label: key, data: data.map(d => d[key] || 0), backgroundColor: color, borderColor: color, borderWidth: 1, stack: 'a' });
+
+    charts.defectTrend = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          mk('Critical', cssVar('--chart-red') + 'cc'),
+          mk('Major',    cssVar('--chart-orange') + 'cc'),
+          mk('Minor',    cssVar('--chart-blue') + 'cc'),
+          mk('None',     cssVar('--chart-green') + 'cc')
+        ]
+      },
+      options: {
+        ...chartBaseOpts(),
+        interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { display: true, labels: { color: cssVar('--chart-tick'), font: { size: 11 } } } },
+        scales: { x: { stacked: true, grid: { display: false }, ticks: { color: cssVar('--chart-tick') } },
+                  y: { stacked: true, beginAtZero: true, ticks: { color: cssVar('--chart-tick') }, grid: { color: cssVar('--chart-grid') } } },
+        onClick: (e, el) => {
+          if (!el.length) return;
+          const dt = data[el[0].index].date;
+          document.getElementById('rcaFilterFrom').value = dt;
+          document.getElementById('rcaFilterTo').value = dt;
+          document.getElementById('rcaFilterDateField').value = 'timestamp';
+          loadRcaAnalytics();
+        }
+      }
+    });
+  }
+
+  function renderParetoChart(a) {
+    const canvas = document.getElementById('rcaParetoChart');
+    if (!canvas || typeof Chart === 'undefined') return;
+    destroyChart('pareto');
+    const entries = (a.paretoFailures || []).slice(0, 12);
+    const labels = entries.map(([k]) => k.length > 28 ? k.slice(0, 26) + '…' : k);
+    const counts = entries.map(([,v]) => v);
+    const total = counts.reduce((a,b) => a + b, 0);
+    let cum = 0;
+    const cumPct = counts.map(v => { cum += v; return +(cum / total * 100).toFixed(1); });
+
+    charts.pareto = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          { label: 'Count', data: counts, backgroundColor: cssVar('--accent'), order: 2, yAxisID: 'y', borderRadius: 4 },
+          { label: 'Cumulative %', data: cumPct, type: 'line', borderColor: cssVar('--chart-orange'), backgroundColor: 'transparent', borderWidth: 2, pointRadius: 3, order: 1, yAxisID: 'y1' }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: true, labels: { color: cssVar('--chart-tick'), font: { size: 11 } } } },
+        scales: {
+          x: { ticks: { color: cssVar('--chart-tick'), maxRotation: 45, minRotation: 0, autoSkip: false, font: { size: 10 } }, grid: { display: false } },
+          y: { beginAtZero: true, position: 'left', ticks: { color: cssVar('--chart-tick') }, grid: { color: cssVar('--chart-grid') } },
+          y1: { beginAtZero: true, max: 100, position: 'right', ticks: { color: cssVar('--chart-orange'), callback: v => v + '%' }, grid: { display: false } }
+        },
+        onClick: (e, el) => {
+          if (!el.length) return;
+          const idx = el[0].index;
+          document.getElementById('rcaFilterSearch').value = entries[idx][0];
+          loadRcaAnalytics();
+        }
+      }
+    });
+  }
+
+  function renderScatterChart(a) {
+    const canvas = document.getElementById('rcaScatterChart');
+    if (!canvas || typeof Chart === 'undefined') return;
+    destroyChart('scatter');
+    const data = (a.analystMatrix || []).filter(x => x.count >= 3);
+    charts.scatter = new Chart(canvas, {
+      type: 'bubble',
+      data: {
+        datasets: [{
+          label: 'Analysts',
+          data: data.map(d => ({ x: d.count, y: d.avgScore, r: Math.min(Math.max(d.avgCycle * 2, 4), 20), _name: d.name })),
+          backgroundColor: cssVar('--chart-blue') + '80',
+          borderColor: cssVar('--chart-blue'),
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: (ctx) => {
+            const raw = ctx.raw;
+            return `${raw._name}: ${raw.x} cases, score ${raw.y}, ~${(raw.r/2).toFixed(0)}d cycle`;
+          } } }
+        },
+        scales: {
+          x: { title: { display: true, text: 'Cases Reviewed', color: cssVar('--chart-tick') }, ticks: { color: cssVar('--chart-tick') }, grid: { color: cssVar('--chart-grid') } },
+          y: { title: { display: true, text: 'Avg Defect Score', color: cssVar('--chart-tick') }, ticks: { color: cssVar('--chart-tick') }, grid: { color: cssVar('--chart-grid') }, beginAtZero: true }
+        },
+        onClick: (e, el) => {
+          if (!el.length) return;
+          document.getElementById('rcaFilterAnalyst').value = data[el[0].index].name;
+          loadRcaAnalytics();
+        }
+      }
+    });
+  }
+
+  function renderCycleHistogram(a) {
+    const canvas = document.getElementById('rcaCycleHistogram');
+    if (!canvas || typeof Chart === 'undefined') return;
+    destroyChart('cycleHist');
+    const allLabels = new Set([...(a.cycleHistogramW2Q||[]).map(x=>x.label), ...(a.cycleHistogramQ2R||[]).map(x=>x.label)]);
+    const labels = Array.from(allLabels).sort((x,y) => parseInt(x) - parseInt(y));
+    const toMap = (arr) => Object.fromEntries((arr||[]).map(x => [x.label, x.count]));
+    const m1 = toMap(a.cycleHistogramW2Q), m2 = toMap(a.cycleHistogramQ2R);
+    charts.cycleHist = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          { label: 'Work→QC', data: labels.map(l => m1[l] || 0), backgroundColor: cssVar('--chart-blue') + 'aa', borderRadius: 4 },
+          { label: 'QC→RCA', data: labels.map(l => m2[l] || 0), backgroundColor: cssVar('--chart-orange') + 'aa', borderRadius: 4 }
+        ]
+      },
+      options: {
+        ...chartBaseOpts(),
+        plugins: { legend: { display: true, labels: { color: cssVar('--chart-tick'), font: { size: 11 } } } },
+        scales: { x: { stacked: false, ticks: { color: cssVar('--chart-tick') }, grid: { display: false } },
+                  y: { beginAtZero: true, ticks: { color: cssVar('--chart-tick') }, grid: { color: cssVar('--chart-grid') } } }
+      }
+    });
+  }
+
+  function renderPhaseHeatmap(a) {
+    const container = document.getElementById('rcaPhaseHeatmap');
+    const data = a.phaseHeatmap || [];
+    if (!data.length) { container.innerHTML = '<div class="analytics-empty">No data</div>'; return; }
+    const phases = [['p2','P2 Base'], ['p3','P3 Txn'], ['p4','P4 AU'], ['p5','P5 Dec'], ['p6','P6 Post'], ['p7','P7 Doc']];
+    let html = '<div style="display:grid; gap:3px; font-size:11px;">';
+    html += `<div style="display:grid; grid-template-columns: 72px repeat(${data.length}, minmax(0,1fr)); gap:3px; font-weight:700; color:var(--text-secondary);">`;
+    html += '<div></div>' + data.map(d => `<div style="text-align:center; font-size:10px;">${d.month}</div>`).join('') + '</div>';
+    phases.forEach(([key, name]) => {
+      html += `<div style="display:grid; grid-template-columns: 72px repeat(${data.length}, minmax(0,1fr)); gap:3px; align-items:center;">`;
+      html += `<div style="font-weight:600; font-size:11px;">${name}</div>`;
+      data.forEach(d => {
+        const v = d[key];
+        const alpha = Math.min(Math.max(v / 40, 0.05), 1);
+        const bg = `rgba(245, 54, 92, ${alpha})`;
+        const fg = v > 20 ? '#fff' : 'var(--text-primary)';
+        html += `<div style="background:${bg}; color:${fg}; text-align:center; padding:7px 2px; border-radius:4px; cursor:pointer; font-weight:600;" onclick="filterByMonth('${d.month}')" title="${v}% fail">${v}%</div>`;
+      });
+      html += '</div>';
+    });
+    html += '</div>';
+    container.innerHTML = html;
+  }
+
+  function filterByMonth(month) {
+    const [y, m] = month.split('-');
+    const lastDay = new Date(y, m, 0).getDate();
+    document.getElementById('rcaFilterFrom').value = month + '-01';
+    document.getElementById('rcaFilterTo').value = month + '-' + String(lastDay).padStart(2, '0');
+    document.getElementById('rcaFilterDateField').value = 'timestamp';
+    loadRcaAnalytics();
+  }
+
+  function loadRcaTable(page) {
+    rcaTablePage = page || 1;
+    rcaFilters = getRcaFiltersFromUi();
+    setConn('busy', 'Loading table…');
+    google.script.run
+      .withSuccessHandler(onRcaTableLoaded)
+      .withFailureHandler(err => showToast({ title: 'Table error', description: (err && err.message) || String(err), type: 'error' }))
+      .getRcaResultsTable(rcaFilters, rcaTablePage, RCA_PAGE_SIZE);
+  }
+
+  function onRcaTableLoaded(resp) {
+    setConn('online', 'Ready');
+    if (!resp.success) { showToast({ title: 'Failed', description: resp.error, type: 'error' }); return; }
+
+    document.getElementById('rcaTableCount').textContent = resp.total.toLocaleString();
+    const tbody = document.getElementById('rcaTableBody');
+
+    if (resp.rows.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="14" class="analytics-empty">No rows match the current filters</td></tr>`;
+      document.getElementById('rcaPaginationInfo').textContent = '0 rows';
+      document.getElementById('rcaPaginationControls').innerHTML = '';
+      return;
+    }
+
+    const trunc = (s, n = 60) => {
+      const str = String(s || '');
+      return str.length > n ? str.slice(0, n) + '…' : str;
+    };
+
+    tbody.innerHTML = resp.rows.map(r => {
+      const linkCell = (url, label) => url
+        ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener" class="text-link">${label} ↗</a>`
+        : `<span class="text-link disabled">—</span>`;
+
+      return `<tr>
+        <td>${escapeHtml(r.timestamp)}</td>
+        <td><strong>${escapeHtml(r.caseId)}</strong></td>
+        <td><span class="defect-pill defect-pill-${escapeHtml(r.defect)}">${escapeHtml(r.defect)}</span></td>
+        <td>${escapeHtml(r.product)}</td>
+        <td>${escapeHtml(r.analyst)}</td>
+        <td>${escapeHtml(r.qcReviewer)}</td>
+        <td>${escapeHtml(r.errorSource)}</td>
+        <td><strong>${escapeHtml(String(r.binaryDefectScore || '0'))}</strong></td>
+        <td>
+          ${r.flagToTL     ? '<span class="action-pill active flag">🚩 TL</span>' : ''}
+          ${r.toBeAppealed ? '<span class="action-pill active appeal">⚖️ Appeal</span>' : ''}
+          ${r.failAccepted ? '<span class="action-pill active accepted">✓ Accept</span>' : ''}
+        </td>
+        <td>${linkCell(r.qcLink, 'QC')} · ${linkCell(r.boLink, 'BO')}</td>
+        <td>${escapeHtml(String(r.cycleWorkToQc || ''))} / ${escapeHtml(String(r.cycleQcToRca || ''))}</td>
+        <td title="${escapeHtml(r.comments || '')}"><span class="table-cell-trunc">${escapeHtml(trunc(r.comments, 80))}</span></td>
+        <td title="${escapeHtml(r.sysFailTxt || '')}"><span class="table-cell-trunc">${escapeHtml(trunc(r.sysFailTxt, 80))}</span></td>
+        <td title="${escapeHtml(r.suggestedUpdate || '')}"><span class="table-cell-trunc">${escapeHtml(trunc(r.suggestedUpdate, 80))}</span></td>
+      </tr>`;
+    }).join('');
+
+    const start = (resp.page - 1) * resp.pageSize + 1;
+    const end   = Math.min(start + resp.rows.length - 1, resp.total);
+    document.getElementById('rcaPaginationInfo').textContent = `Showing ${start.toLocaleString()}–${end.toLocaleString()} of ${resp.total.toLocaleString()}`;
+    document.getElementById('rcaPaginationControls').innerHTML = _buildPagination(resp.page, resp.pageSize, resp.total, 'loadRcaTable');
+  }
+
+  function exportRcaCsv() {
+    if (!rcaFilters) { showToast({ title: 'No filters set', type: 'warn' }); return; }
+    setConn('busy', 'Exporting…');
+    google.script.run
+      .withSuccessHandler(resp => {
+        setConn('online', 'Ready');
+        if (!resp.success) { showToast({ title: 'Export failed', description: resp.error, type: 'error' }); return; }
+        const blob = new Blob([resp.csv], { type: 'text/csv;charset=utf-8;' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href = url;
+        a.download = `RCA_Export_${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast({ title: 'Exported', description: `${resp.rowCount} rows`, type: 'success' });
+      })
+      .withFailureHandler(err => { setConn('offline', 'Error'); showToast({ title: 'Export error', description: err.message, type: 'error' }); })
+      .exportRcaToCsv(rcaFilters);
+  }
+
+  function toggleActionDrawer() {
+    document.getElementById('actionDrawer').classList.toggle('open');
+    renderActionDrawer();
+  }
+
+  function flagInsight(title, dataKey) {
+    const ctx = { view: 'analytics', chart: dataKey, filters: getRcaFiltersFromUi(), timestamp: new Date().toISOString() };
+    const desc = `Insight flagged from RCA Analytics:\n"${title}"\n\nCurrent filter context:\n${JSON.stringify(ctx.filters, null, 2)}`;
+    actionCart.push({ id: Date.now(), title, description: desc, category: 'Process', priority: 'Medium', proposedOwner: 'Team Lead', context: ctx, status: 'draft' });
+    renderActionDrawer();
+    showToast({ title: 'Flagged for Jira', description: `"${title}" added to cart`, type: 'success' });
+    updateActionBadge();
+  }
+
+  function updateActionBadge() {
+    const fab = document.getElementById('actionFab');
+    fab.innerHTML = '🚩' + (actionCart.length ? `<span class="badge">${actionCart.length}</span>` : '');
+  }
+
+  function renderActionDrawer() {
+    const body = document.getElementById('actionDrawerBody');
+    if (!actionCart.length) { body.innerHTML = '<div class="diag-empty">No items flagged yet.<br>Click 🚩 on any chart or insight.</div>'; return; }
+    body.innerHTML = actionCart.map((item, idx) => `
+      <div class="action-item">
+        <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+          <span style="font-weight:700; color:var(--accent);">#${idx+1}</span>
+          <button class="btn btn-ghost btn-sm" style="padding:2px 6px;" onclick="removeActionItem(${item.id})">🗑</button>
+        </div>
+        <label>Summary</label>
+        <input value="${escapeHtml(item.title)}" onchange="actionCart[${idx}].title = this.value">
+        <label>Description</label>
+        <textarea rows="2" onchange="actionCart[${idx}].description = this.value">${escapeHtml(item.description)}</textarea>
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:6px; margin-top:6px;">
+          <div><label>Category</label><select onchange="actionCart[${idx}].category = this.value">${['Process','Product','Training','System','Policy'].map(c=>`<option ${item.category===c?'selected':''}>${c}</option>`).join('')}</select></div>
+          <div><label>Priority</label><select onchange="actionCart[${idx}].priority = this.value">${['High','Medium','Low'].map(c=>`<option ${item.priority===c?'selected':''}>${c}</option>`).join('')}</select></div>
+          <div><label>Owner</label><select onchange="actionCart[${idx}].proposedOwner = this.value">${['Team Lead','Product','Ops','QA','Engineering'].map(c=>`<option ${item.proposedOwner===c?'selected':''}>${c}</option>`).join('')}</select></div>
+        </div>
+        <button class="btn btn-primary btn-sm btn-block mt-1" onclick="submitActionItem(${idx})">💾 Send to Sheet</button>
+      </div>
+    `).join('');
+  }
+
+  function removeActionItem(id) { actionCart = actionCart.filter(i => i.id !== id); renderActionDrawer(); updateActionBadge(); }
+
+  function submitActionItem(idx) {
+    const item = actionCart[idx]; if (!item) return;
+    google.script.run
+      .withSuccessHandler(() => { showToast({ title: 'Saved to Action Items', type: 'success' }); item.status = 'saved'; renderActionDrawer(); })
+      .withFailureHandler(err => showToast({ title: 'Save failed', description: err.message, type: 'error' }))
+      .logActionItem(item);
+  }
+
+  function pushAllToSheet() {
+    const unsaved = actionCart.filter(i => i.status !== 'saved');
+    if (!unsaved.length) { showToast({ title: 'All items already saved' }); return; }
+    let done = 0;
+    unsaved.forEach(item => {
+      google.script.run
+        .withSuccessHandler(() => { done++; if (done === unsaved.length) { showToast({ title: 'All saved', type: 'success' }); renderActionDrawer(); } })
+        .withFailureHandler(err => showToast({ title: 'Batch save failed', description: err.message, type: 'error' }))
+        .logActionItem(item);
+    });
+  }
+
+  function exportJiraCsv() {
+    if (!actionCart.length) { showToast({ title: 'Cart is empty', type: 'warn' }); return; }
+    google.script.run
+      .withSuccessHandler(resp => {
+        if (!resp.success) { showToast({ title: 'Export failed', description: resp.error, type: 'error' }); return; }
+        const blob = new Blob([resp.csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = `RCA_Jira_Import_${new Date().toISOString().slice(0,10)}.csv`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+        showToast({ title: 'Jira CSV exported', description: `${resp.count} rows ready for Jira bulk import`, type: 'success' });
+      })
+      .withFailureHandler(err => showToast({ title: 'Export error', description: err.message, type: 'error' }))
+      .exportActionsToJiraCsv();
+  }
+
+  function _barList(obj, orderKeys, limit) {
+    limit = limit || 8;
+    const entries = orderKeys
+      ? orderKeys.filter(k => obj[k]).map(k => [k, obj[k]])
+      : Object.entries(obj || {}).sort((a, b) => b[1] - a[1]).slice(0, limit);
+    if (entries.length === 0) return '<div class="analytics-empty">No data</div>';
+    const max = Math.max(...entries.map(([, v]) => v), 1);
+    return entries.map(([k, v]) =>
+      `<div class="bar-row">
+         <div class="bar-label" title="${escapeHtml(k)}">${escapeHtml(k)}</div>
+         <div class="bar-track"><div class="bar-fill" style="width:${(v / max) * 100}%"></div></div>
+         <div class="bar-value">${v}</div>
+       </div>`
+    ).join('');
+  }
+
+  function _leaderboard(obj) {
+    const entries = Object.entries(obj || {});
+    if (entries.length === 0) return '<div class="analytics-empty">No data</div>';
+    const medals = ['gold', 'silver', 'bronze'];
+    return entries.map(([name, count], i) => {
+      const rankCls = i < 3 ? medals[i] : '';
+      const shortName = name.length > 28 ? name.slice(0, 26) + '…' : name;
+      return `<div class="lb-row" data-name="${escapeHtml(name)}" data-field="conductor">
+        <div class="lb-rank ${rankCls}">${i + 1}</div>
+        <div class="lb-name" title="${escapeHtml(name)}">${escapeHtml(shortName)}</div>
+        <div class="lb-count">${count}</div>
+      </div>`;
+    }).join('');
+  }
+
+  document.addEventListener('click', (e) => {
+    const row = e.target.closest('.lb-row');
+    if (row && row.dataset.name) quickFilterBy(row.dataset.name, row.dataset.field || 'conductor');
+  });
+
+  function quickFilterBy(value, field) {
+    const map = {
+      conductor: 'rcaFilterConductor', qcReviewer: 'rcaFilterQcReviewer',
+      analyst:   'rcaFilterAnalyst',   team:       'rcaFilterTeam',
+      agency:    'rcaFilterAgency',    product:    'rcaFilterProduct'
+    };
+    const id = map[field];
+    if (id && document.getElementById(id)) {
+      document.getElementById(id).value = value;
+      loadRcaAnalytics();
+      showToast({ title: 'Filter applied', description: `${field} = ${value}`, type: 'success' });
+    }
+  }
+
+  function _buildPagination(currentPage, pageSize, total, fnName) {
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const buttons = [];
+    buttons.push(`<button ${currentPage === 1 ? 'disabled' : ''} onclick="${fnName}(${currentPage - 1})">‹</button>`);
+    const set = new Set([1, totalPages, currentPage, currentPage - 1, currentPage + 1]);
+    if (currentPage <= 3) [2, 3, 4].forEach(p => set.add(p));
+    if (currentPage >= totalPages - 2) [totalPages - 3, totalPages - 2, totalPages - 1].forEach(p => set.add(p));
+    const sorted = [...set].filter(p => p >= 1 && p <= totalPages).sort((a, b) => a - b);
+    let last = 0;
+    sorted.forEach(p => {
+      if (p - last > 1) buttons.push('<button disabled>…</button>');
+      buttons.push(`<button class="${p === currentPage ? 'active' : ''}" onclick="${fnName}(${p})">${p}</button>`);
+      last = p;
+    });
+    buttons.push(`<button ${currentPage === totalPages ? 'disabled' : ''} onclick="${fnName}(${currentPage + 1})">›</button>`);
+    return buttons.join('');
+  }
+
+  function chartBaseOpts({ yLabel, noData, noDataMsg } = {}) {
+    return {
+      responsive: true, maintainAspectRatio: false,
+      animation: { duration: 250 },
+      plugins: {
+        legend: { display: false },
+        tooltip: { mode: 'index', intersect: false },
+        ...(noData && { title: { display: true, text: noDataMsg || 'No data', color: cssVar('--chart-gray'), font: { size: 13 } } })
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: cssVar('--chart-tick'), maxRotation: 0, autoSkip: true, maxTicksLimit: 12 } },
+        y: {
+          beginAtZero: true,
+          ticks: { color: cssVar('--chart-tick'), precision: 0 },
+          grid: { color: cssVar('--chart-grid') },
+          title: yLabel ? { display: true, text: yLabel, color: cssVar('--chart-tick') } : undefined
+        }
+      }
+    };
+  }
+
+  window.__rcaCleanup = function () {
+    Object.keys(charts).forEach(destroyChart);
+  };
+})();
+</script>
