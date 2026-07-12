@@ -1,2067 +1,565 @@
 // ============================================================
-// FIU RCA WIZARD — Code.gs
-// Complete production version + RCA Results column migration tool
+// FIU RCA WIZARD - Code.gs (v6.4 - LLM per phase & Custom Options)
 // ============================================================
 
-// ─────────────────────────────────────────────────────────────
-// 1. ENTRY POINT
-// ─────────────────────────────────────────────────────────────
 function doGet(e) {
   return HtmlService.createTemplateFromFile('Index')
     .evaluate()
     .setTitle('FIU RCA Wizard')
-    // WARNING: ALLOWALL permits any site to iframe this app.
-    // If you do not need cross-origin framing, remove the line below.
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
-// ─────────────────────────────────────────────────────────────
-// 2. CONSTANTS
-// ─────────────────────────────────────────────────────────────
-const FEED_SHEET_NAME     = 'Daily Input Feed';
-const FEED_REFRESH_KEY    = 'feed_last_refresh';
-const SUBMITTED_CACHE_KEY = 'submitted_case_ids_v1';
-const SUBMITTED_CACHE_TTL = 300;   // 5 minutes
-const HEADER_CACHE_KEY    = 'daily_input_headers_v1';
-const HEADER_CACHE_TTL    = 60;    // 1 minute
-const LOCK_TTL            = 1800;  // 30 minutes
-
-// ─────────────────────────────────────────────────────────────
-// 3. HEALTH CHECK / PING
-// ─────────────────────────────────────────────────────────────
-function ping() {
-  return {
-    success: true,
-    now: new Date().toISOString(),
-    user: Session.getActiveUser().getEmail() || 'anonymous',
-    version: '4.2'
-  };
+function include(filename) {
+  try { return HtmlService.createHtmlOutputFromFile(filename).getContent(); } 
+  catch (e) { return '<!-- Error including ' + filename + ': ' + e.message + ' -->'; }
 }
 
-// ─────────────────────────────────────────────────────────────
-// 4. CASE LOCKING
-// ─────────────────────────────────────────────────────────────
+// ============================================================
+// CONSTANTS & SCHEMA (116 entries)
+// ============================================================
+var FEED_SHEET_NAME     = 'Daily Input Feed';
+var SUBMITTED_CACHE_KEY = 'submitted_case_ids_v1';
+var LOCK_TTL            = 1800;
+var SHEET_NAME_RCA      = 'RCA Results';
+
+var CURRENT_SCHEMA = [
+  'Timestamp', 'RCA Conductor Email', 'QC Reviewer', 'Case ID', 'Product', 'Authority', 'Country', 'UAR Origin',
+  'Phase 1 Scope (Full vs Short)', 'Duplicate Identified', 'Offboarding Status Checked', 'Previous Notes/Alerts', 'Reason for Escalation',
+  'Risk Tags', 'Typologies', 'Multi Suspects', 'Analyst Identified Suspects',
+  'P1 LLM Output', 'P1 LLM Output Fail',
+  'P2 Baseline Pass', 'P2 Baseline Fail Reason', 'P2 OSINT Pass', 'P2 OSINT Fail Reason', 'P2 OSINT Documented in RBI',
+  'P2 LLM Output', 'P2 LLM Output Fail',
+  'P3 Trans Baseline Pass', 'P3 Trans Baseline Fail', 'P3 Module Pass', 'P3 Module Fail',
+  'P3 LLM Output', 'P3 LLM Output Fail',
+  'P4 Short/Full Correct', 'P4 Req Count', 'P4 Rev Count', 'P4 Correct All', 'P4 AU Details',
+  'P4 LLM Output', 'P4 LLM Output Fail',
+  'P5 MS Decision Correct', 'P5 Incorrect Action', 'P5 Juris Correct', 'P5 Juris Miss', 'P5 Excep Correct', 'P5 Excep Miss', 'P5 Biz Matrix Correct', 'P5 Biz Miss',
+  'P5 LLM Output', 'P5 LLM Output Fail',
+  'P6 EDD Correct', 'P6 EDD Miss', 'P6 Juris Notes Correct', 'P6 Juris Notes Miss', 'P6 Templates Correct', 'P6 Templates Miss', 'P6 Dante Correct', 'P6 Dante Miss', 'P6 Tags Correct', 'P6 Tags Miss', 'P6 Alerts Cleared', 'P6 Alerts Miss', 'P6 Offboard Correct', 'P6 Offboard Miss', 'P6 Suspects Correct', 'P6 Suspects Miss', 'P6 Refunds Correct', 'P6 Refunds Miss',
+  'P6 LLM Output', 'P6 LLM Output Fail',
+  'P7 Vague Claims', 'P7 Broken Strings', 'P7 Upstream Flags', 'P7 External Enquiry', 'Negative Impact',
+  'RCA Outcome Correct', 'System Process Fail', 'System Process Details', 'QC Agree', 'Error Source', 'Suggested Update', 'Reviewer Comments',
+  'Flag to TL', 'To be Appealed', 'Fail Accepted', 'Remediation Status', 'Remediation Disagreement', 'Review Done Date', 'Work Done Date', 'Review Result', 'Task Type', 'Entity Name', 'Agency', 'Team', 'Analyst', 'Proactive', 'Outcome Defect', 'QC Keywords', 'Scanner Red Flags',
+  'LOB', 'Employee Email', 'Entity Region', 'Batch ID', 'Line Manager Email', 'Recommendations', 'BO Link', 'QC Link', 'Appeal Outcome', 'Entity Region Grouped', 'Is Probation', 'Remediation Required', 'Was Appealed',
+  'Cycle Work-to-QC (days)', 'Cycle QC-to-RCA (days)', 'Binary Defect Score', 'Task Type Match', 'Correct Task Type'
+];
+
+var PHASE_QUESTION_CONFIG = [
+  { phase: 1, key: 'p1Scope', passValue: 'Yes', failValue: 'No' }, { phase: 1, key: 'duplicateIdentified', passValue: 'Yes', failValue: 'No' }, { phase: 1, key: 'p1DuplicateAction', passValue: 'Yes', failValue: 'No' }, { phase: 1, key: 'p1MultiSuspect', passValue: 'Yes', failValue: 'No' },
+  { phase: 2, key: 'p2Baseline', passValue: 'Yes', failValue: 'No', reasonKey: 'p2BaselineFail' }, { phase: 2, key: 'p2Osint', passValue: 'Yes', failValue: 'No', reasonKey: 'p2OsintFail' }, { phase: 2, key: 'p2OsintDoc', passValue: 'Yes', failValue: 'No' },
+  { phase: 3, key: 'p3Baseline', passValue: 'Yes', failValue: 'No', reasonKey: 'p3BaselineFail' }, { phase: 3, key: 'p3Module', passValue: 'Yes', failValue: 'No', reasonKey: 'p3ModuleFail' },
+  { phase: 4, key: 'p4ShortFull', passValue: 'Yes', failValue: 'No' }, { phase: 4, key: 'p4CorrectAll', passValue: 'Yes', failValue: 'No' },
+  { phase: 5, key: 'p5Decision', passValue: 'Yes', failValue: 'No', reasonKey: 'p5ActionError' },
+  { phase: 6, key: 'p6Edd', passValue: 'Yes', failValue: 'No', reasonKey: 'p6EddTxt' }, { phase: 6, key: 'p6Juris', passValue: 'Yes', failValue: 'No', reasonKey: 'p6JurisTxt' }, { phase: 6, key: 'p6Template', passValue: 'Yes', failValue: 'No', reasonKey: 'p6TemplateTxt' }, { phase: 6, key: 'p6Dante', passValue: 'Yes', failValue: 'No', reasonKey: 'p6DanteTxt' }, { phase: 6, key: 'p6Tags', passValue: 'Yes', failValue: 'No', reasonKey: 'p6TagsTxt' }, { phase: 6, key: 'p6Alerts', passValue: 'Yes', failValue: 'No', reasonKey: 'p6AlertsTxt' }, { phase: 6, key: 'p6Offboard', passValue: 'Yes', failValue: 'No', reasonKey: 'p6OffboardTxt' }, { phase: 6, key: 'p6Suspects', passValue: 'Yes', failValue: 'No', reasonKey: 'p6SuspectsTxt' }, { phase: 6, key: 'p6Refunds', passValue: 'Yes', failValue: 'No', reasonKey: 'p6RefundsTxt' },
+  { phase: 7, key: 'p7Vague', passValue: 'No', failValue: 'Yes (Defect)' }, { phase: 7, key: 'p7BrokenStrings', passValue: 'No', failValue: 'Yes (Defect)' }, { phase: 7, key: 'p7UpstreamFlags', passValue: 'Yes', failValue: 'No (Defect)' }, { phase: 7, key: 'p7ExtEnquiry', passValue: 'Yes', failValue: 'No (Defect)' },
+  // LLM Outputs per phase
+  { phase: 1, key: 'p1LlmOutput', passValue: 'Yes', failValue: 'No', reasonKey: 'p1LlmFail' },
+  { phase: 2, key: 'p2LlmOutput', passValue: 'Yes', failValue: 'No', reasonKey: 'p2LlmFail' },
+  { phase: 3, key: 'p3LlmOutput', passValue: 'Yes', failValue: 'No', reasonKey: 'p3LlmFail' },
+  { phase: 4, key: 'p4LlmOutput', passValue: 'Yes', failValue: 'No', reasonKey: 'p4LlmFail' },
+  { phase: 5, key: 'p5LlmOutput', passValue: 'Yes', failValue: 'No', reasonKey: 'p5LlmFail' },
+  { phase: 6, key: 'p6LlmOutput', passValue: 'Yes', failValue: 'No', reasonKey: 'p6LlmFail' }
+];
+
+// ============================================================
+// LOCK & PING
+// ============================================================
+function ping() { return { success: true, user: Session.getActiveUser().getEmail() || 'anonymous', version: '6.4' }; }
+
 function lockCase(caseId) {
-  const t0 = Date.now();
+  var lock = LockService.getScriptLock();
   try {
-    const cache = CacheService.getScriptCache();
-    const key   = 'lock_' + caseId;
-    const owner = Session.getActiveUser().getEmail() || 'anonymous';
-    const existing = cache.get(key);
-    if (existing && existing !== owner) {
-      return _meta({ success: false, lockedBy: existing, caseId }, t0);
-    }
-    cache.put(key, owner, LOCK_TTL);
-    return _meta({ success: true, lockedBy: owner, caseId }, t0);
-  } catch (e) {
-    return _meta({ success: false, error: e.message }, t0);
-  }
+    lock.waitLock(5000);
+    var cache = CacheService.getScriptCache(); var key = 'lock_' + caseId; var owner = Session.getActiveUser().getEmail() || 'anonymous';
+    var existing = cache.get(key);
+    if (existing && existing !== owner) return { success: false, lockedBy: existing, caseId: caseId };
+    cache.put(key, owner, LOCK_TTL); return { success: true, lockedBy: owner, caseId: caseId };
+  } catch (e) { return { success: false, error: e.toString() }; }
+  finally { try { lock.releaseLock(); } catch (_) {} }
 }
+function refreshLock(caseId) { return lockCase(caseId); }
+function unlockCase(caseId) { try { CacheService.getScriptCache().remove('lock_' + caseId); return { success: true }; } catch (e) { return { success: false, error: e.toString() }; } }
 
-function refreshLock(caseId) {
-  const t0 = Date.now();
-  try {
-    const cache = CacheService.getScriptCache();
-    const key   = 'lock_' + caseId;
-    const owner = Session.getActiveUser().getEmail() || 'anonymous';
-    const existing = cache.get(key);
-    if (existing === owner) {
-      cache.put(key, owner, LOCK_TTL);
-      return _meta({ success: true }, t0);
-    }
-    return _meta({ success: false, lockedBy: existing || null }, t0);
-  } catch (e) {
-    return _meta({ success: false, error: e.message }, t0);
-  }
-}
-
-function unlockCase(caseId) {
-  const t0 = Date.now();
-  try {
-    const cache = CacheService.getScriptCache();
-    const key   = 'lock_' + caseId;
-    const owner = Session.getActiveUser().getEmail() || 'anonymous';
-    const existing = cache.get(key);
-    if (!existing || existing === owner) {
-      cache.remove(key);
-      return _meta({ success: true }, t0);
-    }
-    return _meta({ success: false }, t0);
-  } catch (e) {
-    return _meta({ success: false, error: e.message }, t0);
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-// 5. SUBMITTED-CASE CACHE (RCA Results lookup)
-// ─────────────────────────────────────────────────────────────
+// ============================================================
+// PENDING CASES
+// ============================================================
 function _getSubmittedCases(ss) {
-  const cache = CacheService.getScriptCache();
-  const cached = cache.get(SUBMITTED_CACHE_KEY);
-  if (cached) {
-    try {
-      return { set: new Set(JSON.parse(cached)), cached: true };
-    } catch (e) {
-      cache.remove(SUBMITTED_CACHE_KEY); // evict poison
+  var cache = CacheService.getScriptCache(); var cached = cache.get(SUBMITTED_CACHE_KEY);
+  if (cached) { try { return JSON.parse(cached); } catch (_) {} }
+  var submittedCases = {}; var resultsSheet = ss.getSheetByName(SHEET_NAME_RCA);
+  if (resultsSheet) {
+    var data = resultsSheet.getDataRange().getValues();
+    if (data.length >= 2) {
+      var headers = data[0].map(function(h) { return (h || '').toString().toLowerCase().trim(); });
+      var colIdx = headers.indexOf('case id'); var targetCol = colIdx > -1 ? colIdx : 3;
+      for (var r = 1; r < data.length; r++) { var v = data[r][targetCol]; if (v) submittedCases[v.toString().trim()] = true; }
     }
   }
-
-  const submittedCases = new Set();
-  const resultsSheet   = ss.getSheetByName('RCA Results');
-  if (!resultsSheet) return { set: submittedCases, cached: false, missing: true };
-
-  const data = resultsSheet.getDataRange().getValues();
-  let colIdx = 3;
-  if (data.length > 0) {
-    const headers = data[0].map(h => (h || '').toString().toLowerCase().trim());
-    const idx = headers.indexOf('case id');
-    if (idx > -1) colIdx = idx;
-  }
-  for (let r = 1; r < data.length; r++) {
-    const v = data[r][colIdx];
-    if (v) submittedCases.add(v.toString().trim());
-  }
-
-  try {
-    const s = JSON.stringify([...submittedCases]);
-    if (s.length < 90000) cache.put(SUBMITTED_CACHE_KEY, s, SUBMITTED_CACHE_TTL);
-  } catch (e) { /* not critical */ }
-  return { set: submittedCases, cached: false };
+  cache.put(SUBMITTED_CACHE_KEY, JSON.stringify(submittedCases), 60); return submittedCases;
 }
 
-function _invalidateSubmittedCache() {
-  CacheService.getScriptCache().remove(SUBMITTED_CACHE_KEY);
+function _idxOf(headers, candidates) {
+  var hLower = headers.map(function(h) { return String(h || '').toLowerCase().trim(); });
+  for (var i = 0; i < candidates.length; i++) { var c = candidates[i].toLowerCase(); var idx = hLower.indexOf(c); if (idx >= 0) return idx; }
+  for (var j = 0; j < candidates.length; j++) { var c2 = candidates[j].toLowerCase(); var idx2 = -1; for (var k = 0; k < hLower.length; k++) { if (hLower[k].indexOf(c2) > -1) { idx2 = k; break; } } if (idx2 >= 0) return idx2; }
+  return -1;
 }
 
-// ─────────────────────────────────────────────────────────────
-// 6. HEADER CACHE
-// ─────────────────────────────────────────────────────────────
-function _getInputHeaders(sheet) {
-  const cache = CacheService.getScriptCache();
-  const cached = cache.get(HEADER_CACHE_KEY);
-  if (cached) {
-    try { return { headers: JSON.parse(cached), cached: true }; }
-    catch (e) { /* fall through */ }
-  }
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn())
-                       .getDisplayValues()[0]
-                       .map(h => (h || '').toString().toLowerCase().trim());
-  try { cache.put(HEADER_CACHE_KEY, JSON.stringify(headers), HEADER_CACHE_TTL); }
-  catch (e) { /* not critical */ }
-  return { headers, cached: false };
-}
-
-// ─────────────────────────────────────────────────────────────
-// 7. FEED SHEET — pre-computed mirror of Daily Input
-// ─────────────────────────────────────────────────────────────
-function refreshFeedSheet() {
-  const t0 = Date.now();
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const src = ss.getSheetByName('Daily Input');
-  if (!src) throw new Error('Daily Input sheet not found');
-
-  const lastRow = src.getLastRow();
-  const lastCol = src.getLastColumn();
-  if (lastRow < 2) return { rows: 0, duration: Date.now() - t0 };
-
-  const data = src.getRange(1, 1, lastRow, lastCol).getDisplayValues();
-
-  let feed = ss.getSheetByName(FEED_SHEET_NAME);
-  const isNew = !feed;
-  if (isNew) feed = ss.insertSheet(FEED_SHEET_NAME);
-  else feed.clearContents();
-
-  feed.getRange(1, 1, data.length, data[0].length).setValues(data);
-  feed.setFrozenRows(1);
-  CacheService.getScriptCache().put(FEED_REFRESH_KEY, String(Date.now()), 24 * 3600);
-
-  return { isNewSheet: isNew, rows: data.length, cols: data[0].length, duration: Date.now() - t0 };
-}
-
-function getFeedStatus() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const feed = ss.getSheetByName(FEED_SHEET_NAME);
-  if (!feed) return { exists: false };
-  const ts = CacheService.getScriptCache().get(FEED_REFRESH_KEY);
-  return {
-    exists: true,
-    rows: feed.getLastRow(),
-    lastRefresh: ts ? new Date(parseInt(ts)).toISOString() : null
-  };
-}
-
-// ─────────────────────────────────────────────────────────────
-// 8. GET PENDING CASES (main dashboard loader)
-// ─────────────────────────────────────────────────────────────
 function getPendingCases() {
-  const t0 = Date.now();
-  const diag = { stages: {} };
-
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName(FEED_SHEET_NAME) || ss.getSheetByName('Daily Input');
+    if (!sheet) throw new Error('Input sheet not found');
 
-    let sheet = ss.getSheetByName(FEED_SHEET_NAME);
-    const usingFeed = !!sheet;
-    if (!sheet) {
-      sheet = ss.getSheetByName('Daily Input');
-      if (!sheet) {
-        return _meta({
-          success: false,
-          error: 'Neither "Daily Input Feed" nor "Daily Input" sheet found. Run refreshFeedSheet() first.',
-          stage: 'openSheet'
-        }, t0, diag);
-      }
-    }
-    diag.usingFeed = usingFeed;
+    var data = sheet.getDataRange().getValues();
+    var headers = data[0].map(function(h) { return (h || '').toString().toLowerCase().trim(); });
+    var submittedCases = _getSubmittedCases(ss); var currentUser = Session.getActiveUser().getEmail() || '';
+    var pendingCases = [], analytics = { total: 0, retail: 0, business: 0, proactive: 0, lockedByOthers: 0, criticalDefects: 0, slaBreached: 0, appealsPending: 0, defects: {}, teams: {}, agencies: {} };
+    var cache = CacheService.getScriptCache();
 
-    const tRead = Date.now();
-    const lastRow = sheet.getLastRow();
-    const lastCol = sheet.getLastColumn();
-    diag.sheetRows = lastRow;
-    diag.sheetCols = lastCol;
+    var colIdCase = _idxOf(headers, ['case reference id', 'case id']); var colIdAnalyst = _idxOf(headers, ['employee name', 'analyst']); var colIdQcName = _idxOf(headers, ['qc name', 'qc reviewer']);
+    var colIdRevDate = _idxOf(headers, ['review done date', 'review date']); var colIdWorkDate = _idxOf(headers, ['work done date', 'work date']); var colIdTaskType = _idxOf(headers, ['task type name', 'task type']);
+    var colIdSubteam = _idxOf(headers, ['subteam', 'team']); var colIdAgency = _idxOf(headers, ['agency']); var colIdEntity = _idxOf(headers, ['entity name', 'entity']); var colIdProdLine = _idxOf(headers, ['production line', 'line']);
+    var colIdDefect = _idxOf(headers, ['defect', 'outcome defect']); var colIdComment = _idxOf(headers, ['comment', 'comments', 'qc findings']); var colIdBatchId = _idxOf(headers, ['batch id', 'batch']);
+    var colIdQcLink = _idxOf(headers, ['qc link', 'qc url']); var colIdBoLink = _idxOf(headers, ['bo link', 'bo url', 'back office']); var colIdAppeal = _idxOf(headers, ['appeal', 'appeal flag']); var colIdReviewResult = _idxOf(headers, ['review result', 'result']);
+    var colIdLob = _idxOf(headers, ['lob', 'line of business']); var colIdEmpEmail = _idxOf(headers, ['employee email', 'analyst email']); var colIdEntityReg = _idxOf(headers, ['entity region', 'region']); var colIdLmEmail = _idxOf(headers, ['line manager', 'lm email', 'manager email']);
+    var colIdRecs = _idxOf(headers, ['recs', 'recommendations']); var colIdAppealOut = _idxOf(headers, ['appeal outcome']); var colIdEntityRegG = _idxOf(headers, ['entity region grouped', 'region grouped']); var colIdIsProb = _idxOf(headers, ['is probation', 'probation']);
+    var colIdRemed = _idxOf(headers, ['remediation required', 'remediation']); var colIdWasAppealed = _idxOf(headers, ['was appealed', 'appealed']);
 
-    if (lastRow < 2) {
-      return _meta({ success: true, cases: [], count: 0, analytics: _emptyAnalytics() }, t0, diag);
-    }
+    var now = new Date(); var slaThresholdDays = 5;
 
-    const data = sheet.getRange(1, 1, lastRow, lastCol).getValues();
-    diag.stages.readSheet = Date.now() - tRead;
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i]; var caseId = colIdCase >= 0 ? String(row[colIdCase] || '').trim() : '';
+      if (!caseId || submittedCases[caseId]) continue;
 
-    const tHeaders = Date.now();
-    const headerInfo = _getInputHeaders(sheet);
-    const headers = headerInfo.headers;
-    diag.stages.headers = Date.now() - tHeaders;
-    diag.headersCached = headerInfo.cached;
+      var lockVal = cache.get('lock_' + caseId) || '';
+      var rawDefect = colIdDefect >= 0 ? String(row[colIdDefect] || '').toUpperCase() : '';
+      var finalDefect = 'None';
+      if (rawDefect === 'CRITICAL' || rawDefect === 'OUTCOME') finalDefect = 'Critical';
+      else if (rawDefect === 'MAJOR') finalDefect = 'Major'; else if (rawDefect === 'MINOR') finalDefect = 'Minor';
 
-    const col      = (name) => headers.findIndex(h => h.includes(name));
-    const exactCol = (name) => headers.findIndex(h => h === name);
+      var taskTypeRaw = colIdTaskType >= 0 ? String(row[colIdTaskType] || '') : '';
+      var product = taskTypeRaw.toUpperCase().indexOf('BUSINESS') > -1 ? 'BUSINESS' : 'RETAIL';
+      var team = colIdSubteam >= 0 ? (row[colIdSubteam] || 'Unknown') : 'Unknown';
+      var agency = colIdAgency >= 0 ? (row[colIdAgency] || 'Unknown') : 'Unknown';
+      var slaBreached = false;
+      try { var rd = colIdRevDate >= 0 ? row[colIdRevDate] : null; if (rd instanceof Date) { slaBreached = ((now - rd) / 86400000) > slaThresholdDays; } } catch (e2) {}
 
-    const cols = {
-      caseId:        col('case reference id'),
-      analyst:       col('employee name'),
-      qcName:        col('qc name'),
-      revDate:       col('review done date'),
-      workDate:      col('work done date'),
-      taskType:      col('task type name'),
-      subteam:       col('subteam'),
-      agency:        col('agency'),
-      prodLine:      col('production line'),
-      entity:        exactCol('entity name') > -1 ? exactCol('entity name') : col('entity name'),
-      defect:        exactCol('defect')      > -1 ? exactCol('defect')      : col('defect'),
-      comment:       exactCol('comment')     > -1 ? exactCol('comment')     : col('comment'),
-      reviewResult:  col('review result'),
-      batchId:       col('batch id'),
-      lob:           exactCol('lob')         > -1 ? exactCol('lob')         : col('lob'),
-      empEmail:      col('employee email'),
-      region:        exactCol('entity region') > -1
-                       ? exactCol('entity region')
-                       : headers.findIndex(h => h.includes('entity region') && !h.includes('grouped')),
-      lmEmail:       col('line manager email'),
-      recs:          col('reviews recommendations'),
-      appealOutcome: col('appeal outcome'),
-      regionGrouped: col('entity region grouped'),
-      probation:     col('is probation'),
-      remediation:   col('remediation required'),
-      wasAppealed:   col('was appealed')
-    };
-
-    let qcLink = exactCol('qc bo link');
-    if (qcLink === -1) qcLink = exactCol('qc link');
-    if (qcLink === -1) qcLink = exactCol('review id');
-    if (qcLink === -1) qcLink = headers.findIndex(h =>
-        h.includes('qc bo link') || h.includes('qc link') || h.includes('review link') || h.includes('review id'));
-
-    let boLink = exactCol('bo link');
-    if (boLink === -1) boLink = exactCol('qc list of reviews zeus bo link');
-    if (boLink === -1) boLink = headers.findIndex(h =>
-        h.includes('bo link') || h.includes('back office') || h.includes('zeus'));
-    cols.qcLink = qcLink;
-    cols.boLink = boLink;
-
-    const extractDate = (val) => {
-      if (!val) return '';
-      if (val instanceof Date) return Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy-MM-dd');
-      const s = val.toString();
-      return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : s;
-    };
-
-    const safeCell = (row, idx) =>
-      (idx > -1 && row[idx] != null) ? row[idx].toString().trim() : '';
-
-    const extractUrl = (raw) => {
-      const m = String(raw).match(/https?:\/\/[^\s"')>]+/);
-      return m ? m[0] : raw;
-    };
-
-    const tSubmitted = Date.now();
-    const submittedInfo = _getSubmittedCases(ss);
-    const submittedCases = submittedInfo.set;
-    diag.stages.submitted = Date.now() - tSubmitted;
-    diag.submittedCached = submittedInfo.cached;
-
-    const tBuild = Date.now();
-    const cache        = CacheService.getScriptCache();
-    const today        = new Date();
-    const currentUser  = Session.getActiveUser().getEmail() || '';
-    const pendingCases = [];
-    const analytics    = _emptyAnalytics();
-
-    const caseIdCounts = Object.create(null);
-    const lockKeys     = [];
-    const rowsToProcess = [];
-
-    for (let i = 1; i < data.length; i++) {
-      const row    = data[i];
-      const caseId = safeCell(row, cols.caseId);
-      if (!caseId) continue;
-
-      caseIdCounts[caseId] = (caseIdCounts[caseId] || 0) + 1;
-      if (submittedCases.has(caseId)) continue;
-
-      rowsToProcess.push({ row, index: i, caseId });
-      lockKeys.push('lock_' + caseId);
-    }
-
-    const lockMap = lockKeys.length > 0 ? cache.getAll(lockKeys) : {};
-
-    for (let i = 0; i < rowsToProcess.length; i++) {
-      const item    = rowsToProcess[i];
-      const row     = item.row;
-      const caseId  = item.caseId;
-      const lockVal = lockMap['lock_' + caseId] || '';
-
-      const rawDefect = safeCell(row, cols.defect).toUpperCase();
-      let finalDefect = 'None';
-      if      (rawDefect === 'CRITICAL') finalDefect = 'Outcome';
-      else if (rawDefect === 'MAJOR')    finalDefect = 'Major';
-      else if (rawDefect === 'MINOR')    finalDefect = 'Minor';
-      else if (rawDefect)                finalDefect = rawDefect;
-
-      const rawTask   = safeCell(row, cols.taskType);
-      const cleanTask = rawTask.replace(/^FIU_/i, '');
-      const product   = rawTask.toUpperCase().includes('BUSINESS') ? 'BUSINESS' : 'RETAIL';
-
-      const details    = safeCell(row, cols.comment);
-      const hashtags   = details.match(/#[\w_]+/g) || [];
-      const batchIdStr = safeCell(row, cols.batchId);
-      const proactive  = (batchIdStr === '0') ? 'Yes' : 'No';
-
-      const reviewDate = extractDate(cols.revDate > -1 ? row[cols.revDate] : null);
-      const slaDays    = reviewDate ? Math.floor((today - new Date(reviewDate)) / 86400000) : null;
+      var appealRaw = colIdAppeal >= 0 ? String(row[colIdAppeal] || '').toLowerCase().trim() : ''; var isAppeal = appealRaw === 'appeal';
+      var commentText = colIdComment >= 0 ? String(row[colIdComment] || '') : ''; var hashtags = commentText.match(/#[\w_]+/g) || [];
 
       pendingCases.push({
-        rowNum:              item.index + 1,
-        caseId:              caseId,
-        lockedBy:            lockVal,
-        isLockedByMe:        lockVal === currentUser,
-        analyst:             safeCell(row, cols.analyst),
-        qcName:              safeCell(row, cols.qcName),
-        reviewResult:        safeCell(row, cols.reviewResult) || 'N/A',
-        reviewDoneDate:      reviewDate,
-        workDoneDate:        extractDate(cols.workDate > -1 ? row[cols.workDate] : null),
-        taskType:            cleanTask,
-        entityName:          safeCell(row, cols.entity) || 'N/A',
-        agency:              safeCell(row, cols.agency),
-        team:                safeCell(row, cols.subteam)  || 'Unknown',
-        productionLine:      safeCell(row, cols.prodLine) || 'Unknown',
-        product:             product,
-        details:             details,
-        hashtags:            hashtags,
-        defect:              finalDefect,
-        hasFailedOutcome:    (rawDefect === 'CRITICAL') ? 'Yes' : 'No',
-        proactive:           proactive,
-        isDuplicate:         caseIdCounts[caseId] > 1,
-        batchId:             batchIdStr,
-        slaDays:             slaDays,
-        lob:                 safeCell(row, cols.lob),
-        empEmail:            safeCell(row, cols.empEmail),
-        entityRegion:        safeCell(row, cols.region),
-        lmEmail:             safeCell(row, cols.lmEmail),
-        recs:                safeCell(row, cols.recs),
-        boLink:              extractUrl(safeCell(row, cols.boLink)),
-        qcLink:              extractUrl(safeCell(row, cols.qcLink)),
-        appealOutcome:       safeCell(row, cols.appealOutcome),
-        entityRegionGrouped: safeCell(row, cols.regionGrouped),
-        isProbation:         safeCell(row, cols.probation),
-        remediationRequired: safeCell(row, cols.remediation),
-        wasAppealed:         safeCell(row, cols.wasAppealed)
+        rowNum: i + 1, caseId: caseId, lockedBy: lockVal, isLockedByMe: lockVal === currentUser, analyst: colIdAnalyst >= 0 ? row[colIdAnalyst] : '', qcName: colIdQcName >= 0 ? row[colIdQcName] : '',
+        reviewDoneDate: _fmtDate(colIdRevDate >= 0 ? row[colIdRevDate] : ''), workDoneDate: _fmtDate(colIdWorkDate >= 0 ? row[colIdWorkDate] : ''), taskType: taskTypeRaw.replace(/^FIU_/i, ''), entityName: colIdEntity >= 0 ? row[colIdEntity] : '', agency: agency,
+        productionLine: colIdProdLine >= 0 ? (row[colIdProdLine] || 'Unknown') : 'Unknown', team: team, product: product, details: colIdComment >= 0 ? row[colIdComment] : '', defect: finalDefect, proactive: (colIdBatchId >= 0 && row[colIdBatchId] === '0') ? 'Yes' : 'No',
+        slaBreached: slaBreached, qcLink: colIdQcLink >= 0 ? (row[colIdQcLink] || '') : '', boLink: colIdBoLink >= 0 ? (row[colIdBoLink] || '') : '', hashtags: hashtags, isAppeal: isAppeal, reviewResult: colIdReviewResult >= 0 ? String(row[colIdReviewResult] || '') : '',
+        lob: colIdLob >= 0 ? String(row[colIdLob] || '') : '', empEmail: colIdEmpEmail >= 0 ? String(row[colIdEmpEmail] || '') : '', entityRegion: colIdEntityReg >= 0 ? String(row[colIdEntityReg] || '') : '', batchId: colIdBatchId >= 0 ? String(row[colIdBatchId] || '') : '',
+        lmEmail: colIdLmEmail >= 0 ? String(row[colIdLmEmail] || '') : '', recs: colIdRecs >= 0 ? String(row[colIdRecs] || '') : '', appealOutcome: colIdAppealOut >= 0 ? String(row[colIdAppealOut] || '') : '', entityRegionGrouped: colIdEntityRegG >= 0 ? String(row[colIdEntityRegG] || '') : '',
+        isProbation: colIdIsProb >= 0 ? String(row[colIdIsProb] || '') : '', remediationRequired: colIdRemed >= 0 ? String(row[colIdRemed] || '') : '', wasAppealed: colIdWasAppealed >= 0 ? String(row[colIdWasAppealed] || '') : ''
       });
 
-      const t = pendingCases[pendingCases.length - 1].team;
-      analytics.total++;
-      if (product === 'BUSINESS') analytics.business++; else analytics.retail++;
-      analytics.defects[finalDefect] = (analytics.defects[finalDefect] || 0) + 1;
-      analytics.teams[t] = (analytics.teams[t] || 0) + 1;
-      if (proactive === 'Yes') analytics.proactive++;
-      if (lockVal && lockVal !== currentUser) analytics.lockedByOthers++;
-      if (lockVal === currentUser) analytics.lockedByMe++;
-      if (slaDays != null && slaDays > 5) analytics.slaBreached++;
-      if (rawDefect === 'CRITICAL') analytics.criticalDefects++;
+      analytics.total++; if (product === 'BUSINESS') analytics.business++; else analytics.retail++;
+      if (finalDefect === 'Critical') analytics.criticalDefects++; if (colIdBatchId >= 0 && row[colIdBatchId] === '0') analytics.proactive++;
+      if (lockVal && lockVal !== currentUser) analytics.lockedByOthers++; if (slaBreached) analytics.slaBreached++; if (isAppeal) analytics.appealsPending++;
+      analytics.defects[finalDefect] = (analytics.defects[finalDefect] || 0) + 1; analytics.teams[team] = (analytics.teams[team] || 0) + 1; analytics.agencies[agency] = (analytics.agencies[agency] || 0) + 1;
     }
-    diag.stages.build = Date.now() - tBuild;
-
-    const tSort = Date.now();
-    pendingCases.sort((a, b) => {
-      const ta = a.reviewDoneDate ? new Date(a.reviewDoneDate).getTime() : 0;
-      const tb = b.reviewDoneDate ? new Date(b.reviewDoneDate).getTime() : 0;
-      return tb - ta;
-    });
-    diag.stages.sort = Date.now() - tSort;
-
-    analytics.teams = _topN(analytics.teams, 5);
-    analytics.sheetRows = data.length;
-
-    return _meta({ success: true, cases: pendingCases, count: pendingCases.length, analytics }, t0, diag);
-
-  } catch (e) {
-    return _meta({ success: false, error: e.stack || e.toString(), stage: 'unknown' }, t0, diag);
-  }
+    analytics.appealTrackerUrl = PropertiesService.getScriptProperties().getProperty('APPEAL_TRACKER_URL') || '';
+    return { success: true, cases: pendingCases, count: pendingCases.length, analytics: analytics };
+  } catch (e) { return { success: false, error: e.toString() }; }
 }
 
-// ─────────────────────────────────────────────────────────────
-// 9. SUBMIT RCA
-// ─────────────────────────────────────────────────────────────
+// ============================================================
+// SUBMIT RCA
+// ============================================================
 function submitRCA(data) {
-  const t0 = Date.now();
-  if (!data || typeof data !== 'object') throw new Error('Invalid payload');
-  if (!data.caseId) throw new Error('Missing caseId');
-
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const resultsSheet = ss.getSheetByName('RCA Results');
-    if (!resultsSheet) throw new Error('"RCA Results" sheet not found.');
+    var ss = SpreadsheetApp.getActiveSpreadsheet(); var resultsSheet = ss.getSheetByName(SHEET_NAME_RCA);
+    if (!resultsSheet) throw new Error('RCA Results sheet not found');
 
-    unlockCase(data.caseId);
-    _invalidateSubmittedCache();
+    var sDate = new Date(); var wDate = data.workDoneDate ? new Date(data.workDoneDate) : null; var rDate = data.reviewDoneDate ? new Date(data.reviewDoneDate) : null;
+    function days(a, b) { if (a && b && !isNaN(a) && !isNaN(b)) return Math.floor((b - a) / 86400000); return ''; }
 
-    const parseDate = (v) => {
-      if (!v || v === 'N/A') return null;
-      const d = new Date(v);
-      return isNaN(d.getTime()) ? null : d;
+    // Log "Other" custom options
+    for (var key in data) {
+      if (typeof data[key] === 'string' && data[key].indexOf('Other:') === 0) {
+        logCustomOption(key, data[key].substring(7));
+      }
+    }
+
+    var lookup = {
+      'Timestamp': sDate, 'RCA Conductor Email': Session.getActiveUser().getEmail(), 'QC Reviewer': data.qcName, 'Case ID': data.caseId, 'Product': data.product, 'Authority': data.authority, 'Country': data.country, 'UAR Origin': data.origin,
+      'Phase 1 Scope (Full vs Short)': data.p1Scope, 'Duplicate Identified': data.duplicateIdentified, 'Offboarding Status Checked': data.p1DuplicateAction, 'Previous Notes/Alerts': data.prevNote, 'Reason for Escalation': data.escalation,
+      'Risk Tags': data.tag, 'Typologies': data.typology, 'Multi Suspects': data.p1MultiSuspect, 'Analyst Identified Suspects': data.p1AnalystIdentified,
+      'P1 LLM Output': data.p1LlmOutput, 'P1 LLM Output Fail': data.p1LlmFail,
+      'P2 Baseline Pass': data.p2Baseline, 'P2 Baseline Fail Reason': data.p2BaselineFail, 'P2 OSINT Pass': data.p2Osint, 'P2 OSINT Fail Reason': data.p2OsintFail, 'P2 OSINT Documented in RBI': data.p2OsintDoc,
+      'P2 LLM Output': data.p2LlmOutput, 'P2 LLM Output Fail': data.p2LlmFail,
+      'P3 Trans Baseline Pass': data.p3Baseline, 'P3 Trans Baseline Fail': data.p3BaselineFail, 'P3 Module Pass': data.p3Module, 'P3 Module Fail': data.p3ModuleFail,
+      'P3 LLM Output': data.p3LlmOutput, 'P3 LLM Output Fail': data.p3LlmFail,
+      'P4 Short/Full Correct': data.p4ShortFull, 'P4 Req Count': data.p4ReqCount, 'P4 Rev Count': data.p4RevCount, 'P4 Correct All': data.p4CorrectAll, 'P4 AU Details': data.p4AuDetails,
+      'P4 LLM Output': data.p4LlmOutput, 'P4 LLM Output Fail': data.p4LlmFail,
+      'P5 MS Decision Correct': data.p5Decision, 'P5 Incorrect Action': data.p5ActionError, 'P5 Juris Correct': data.p5Juris, 'P5 Juris Miss': data.p5JurisTxt, 'P5 Excep Correct': data.p5Excep, 'P5 Excep Miss': data.p5ExcepTxt, 'P5 Biz Matrix Correct': data.p5Biz, 'P5 Biz Miss': data.p5BizTxt,
+      'P5 LLM Output': data.p5LlmOutput, 'P5 LLM Output Fail': data.p5LlmFail,
+      'P6 EDD Correct': data.p6Edd, 'P6 EDD Miss': data.p6EddTxt, 'P6 Juris Notes Correct': data.p6Juris, 'P6 Juris Notes Miss': data.p6JurisTxt, 'P6 Templates Correct': data.p6Template, 'P6 Templates Miss': data.p6TemplateTxt, 'P6 Dante Correct': data.p6Dante, 'P6 Dante Miss': data.p6DanteTxt, 'P6 Tags Correct': data.p6Tags, 'P6 Tags Miss': data.p6TagsTxt, 'P6 Alerts Cleared': data.p6Alerts, 'P6 Alerts Miss': data.p6AlertsTxt, 'P6 Offboard Correct': data.p6Offboard, 'P6 Offboard Miss': data.p6OffboardTxt, 'P6 Suspects Correct': data.p6Suspects, 'P6 Suspects Miss': data.p6SuspectsTxt, 'P6 Refunds Correct': data.p6Refunds, 'P6 Refunds Miss': data.p6RefundsTxt,
+      'P6 LLM Output': data.p6LlmOutput, 'P6 LLM Output Fail': data.p6LlmFail,
+      'P7 Vague Claims': data.p7Vague, 'P7 Broken Strings': data.p7BrokenStrings, 'P7 Upstream Flags': data.p7UpstreamFlags, 'P7 External Enquiry': data.p7ExtEnquiry, 'Negative Impact': data.negativeImpact,
+      'RCA Outcome Correct': data.rcaOutcome, 'System Process Fail': data.rcaSysFail, 'System Process Details': data.rcaSysFailTxt, 'QC Agree': data.rcaAgree, 'Error Source': data.errorSource, 'Suggested Update': data.rcaUpdate, 'Reviewer Comments': data.rcaComments,
+      'Flag to TL': data.flagToTL, 'To be Appealed': data.toBeAppealed, 'Fail Accepted': data.failAccepted, 'Remediation Status': data.remediationStatus, 'Remediation Disagreement': data.remediationDisagreement, 'Review Done Date': data.reviewDoneDate, 'Work Done Date': data.workDoneDate, 'Review Result': data.reviewResult, 'Task Type': data.taskType, 'Entity Name': data.entityName, 'Agency': data.agency, 'Team': data.team, 'Analyst': data.analyst, 'Proactive': data.proactive, 'Outcome Defect': data.outcomeDefect, 'QC Keywords': data.qcKeywords, 'Scanner Red Flags': '',
+      'LOB': data.lob, 'Employee Email': data.empEmail, 'Entity Region': data.entityRegion, 'Batch ID': data.batchId, 'Line Manager Email': data.lmEmail, 'Recommendations': data.recs, 'BO Link': data.boLink, 'QC Link': data.qcLink, 'Appeal Outcome': data.appealOutcome, 'Entity Region Grouped': data.entityRegionGrouped, 'Is Probation': data.isProbation, 'Remediation Required': data.remediationRequired, 'Was Appealed': data.wasAppealed,
+      'Cycle Work-to-QC (days)': days(wDate, rDate), 'Cycle QC-to-RCA (days)': days(rDate, sDate), 'Binary Defect Score': data.binaryDefectScore, 'Task Type Match': data.taskTypeMatch, 'Correct Task Type': data.correctTaskType
     };
 
-    const wDate = parseDate(data.workDoneDate);
-    const rDate = parseDate(data.reviewDoneDate);
-    const sDate = new Date();
+    var fields = CURRENT_SCHEMA.map(function(name) { return Object.prototype.hasOwnProperty.call(lookup, name) ? lookup[name] : ''; });
+    var normalised = fields.map(function(v) { if (v === true) return 'TRUE'; if (v === false) return 'FALSE'; if (v == null) return ''; return v; });
 
-    const days = (a, b) => {
-      if (!a || !b) return '';
-      const d = Math.floor((b - a) / 86400000);
-      return d >= 0 ? d : 0;
-    };
-    const cycleWorkToQc = (wDate && rDate) ? days(wDate, rDate) : '';
-    const cycleQcToRca  = rDate             ? days(rDate, sDate) : '';
-
-    const fields = [
-      sDate, Session.getActiveUser().getEmail(), data.qcName || '', data.caseId, data.product,
-      data.authority, data.country, data.origin, data.p1Scope, data.duplicateIdentified,
-      data.p1DuplicateAction, data.prevNote, data.escalation, data.tag, data.typology,
-      data.p1MultiSuspect, data.p1AnalystIdentified, data.p2Baseline, data.p2BaselineFail,
-      data.p2Osint, data.p2OsintFail, data.p2OsintDoc, data.p3Baseline, data.p3BaselineFail,
-      data.p3Module, data.p3ModuleFail, data.p4ShortFull, data.p4ReqCount, data.p4RevCount,
-      data.p4CorrectAll, data.p4AuDetails, data.p5Decision, data.p5ActionError, data.p5Juris,
-      data.p5JurisTxt, data.p5Excep, data.p5ExcepTxt, data.p5Biz, data.p5BizTxt,
-      data.p6Edd, data.p6EddTxt, data.p6Juris, data.p6JurisTxt, data.p6Template, data.p6TemplateTxt,
-      data.p6Dante, data.p6DanteTxt, data.p6Tags, data.p6TagsTxt, data.p6Alerts, data.p6AlertsTxt,
-      data.p6Offboard, data.p6OffboardTxt, data.p6Suspects, data.p6SuspectsTxt, data.p6Refunds,
-      data.p6RefundsTxt, data.p7Vague, data.p7BrokenStrings, data.p7UpstreamFlags, data.p7ExtEnquiry,
-      data.rcaOutcome, data.rcaSysFail, data.rcaSysFailTxt, data.rcaAgree, data.rcaErrSource,
-      data.rcaUpdate, data.rcaComments, data.flagToTL, data.toBeAppealed, data.failAccepted,
-      data.reviewDoneDate, data.workDoneDate, data.reviewResult, data.taskType, data.entityName,
-      data.agency, data.team, data.analyst, data.proactive, data.outcomeDefect, data.qcKeywords,
-      data.scannerRedFlags, data.lob, data.empEmail, data.entityRegion, data.batchId, data.lmEmail,
-      data.recs, data.boLink, data.qcLink, data.appealOutcome, data.entityRegionGrouped,
-      data.isProbation, data.remediationRequired, data.wasAppealed, cycleWorkToQc, cycleQcToRca,
-      data.binaryDefectScore, data.taskTypeMatch, data.correctTaskType
-    ];
-
-    const normalised = fields.map(v => {
-      if (typeof v === 'boolean') return v ? 'TRUE' : 'FALSE';
-      if (v === undefined || v === null) return '';
-      return v;
-    });
-
-    if (normalised.length !== CURRENT_SCHEMA.length) {
-      throw new Error(
-        `Schema mismatch: expected ${CURRENT_SCHEMA.length} columns, got ${normalised.length}. ` +
-        `Aborting to prevent data corruption.`
-      );
+    var lastCol = resultsSheet.getLastColumn();
+    if (lastCol === 0) {
+      resultsSheet.getRange(1, 1, 1, CURRENT_SCHEMA.length).setValues([CURRENT_SCHEMA]);
+      resultsSheet.getRange(1, 1, 1, CURRENT_SCHEMA.length).setFontWeight('bold').setBackground('#EEEAFF');
+      resultsSheet.setFrozenRows(1);
     }
 
-    resultsSheet.appendRow(normalised);
+    var existingRow = -1; var finder = resultsSheet.createTextFinder(String(data.caseId)).matchEntireCell(false); var ranges = finder.findAll();
+    for (var r = 0; r < ranges.length; r++) { if (ranges[r].getColumn() === 4) { existingRow = ranges[r].getRow(); break; } }
 
-    // ── Auto-remove processed case from Daily Input & Feed ──
-    try {
-      _removeCaseFromSource(data.caseId, parseInt(data.rowNum) || null);
-    } catch (e) {
-      console.warn('Auto-delete from source sheets failed (non-fatal):', e);
-    }
-
-    return _meta({ success: true, rowAppended: true }, t0);
-
-  } catch (e) {
-    return _meta({ success: false, error: e.message }, t0);
-  }
+    if (existingRow > -1) resultsSheet.getRange(existingRow, 1, 1, normalised.length).setValues([normalised]);
+    else resultsSheet.appendRow(normalised);
+    
+    try { _removeCaseFromSource(data.caseId); } catch (e) { Logger.log('Feed removal failed: ' + e.toString()); }
+    CacheService.getScriptCache().remove(SUBMITTED_CACHE_KEY);
+    unlockCase(data.caseId); 
+    return { success: true };
+  } catch (e) { Logger.log('submitRCA error: ' + e.toString()); return { success: false, error: e.toString() }; }
 }
 
-// ── Helper: remove a case row from Daily Input + Feed after RCA submission ──
-function _removeCaseFromSource(caseId, rowNum) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const out = { daily: null, feed: null };
-
-  // Daily Input
-  const daily = ss.getSheetByName('Daily Input');
-  if (daily) {
-    try {
-      const headers = daily.getRange(1, 1, 1, daily.getLastColumn()).getValues()[0]
-        .map(h => String(h || '').toLowerCase().trim());
-      const caseIdCol = headers.findIndex(h => h.includes('case reference id') || h.includes('case id'));
-      let deleted = false;
-
-      if (rowNum && rowNum > 1) {
-        try {
-          if (caseIdCol > -1) {
-            const val = daily.getRange(rowNum, caseIdCol + 1).getValue();
-            if (String(val).trim() === String(caseId).trim()) {
-              daily.deleteRow(rowNum);
-              deleted = true;
-              out.daily = { method: 'exact', rowNum };
-            }
-          }
-        } catch (e) { /* fallback to search */ }
-      }
-
-      if (!deleted && caseIdCol > -1) {
-        const lastRow = daily.getLastRow();
-        if (lastRow > 1) {
-          const colVals = daily.getRange(2, caseIdCol + 1, lastRow - 1, 1).getValues();
-          const toDelete = [];
-          for (let i = 0; i < colVals.length; i++) {
-            if (String(colVals[i][0]).trim() === String(caseId).trim()) {
-              toDelete.push(i + 2);
-            }
-          }
-          if (toDelete.length) {
-            for (let i = toDelete.length - 1; i >= 0; i--) {
-              daily.deleteRow(toDelete[i]);
-            }
-            out.daily = { method: 'search', deleted: toDelete.length, rows: toDelete };
-          }
-        }
-      }
-    } catch (e) {
-      out.daily = { error: e.message };
-    }
-  }
-
-  // Feed sheet (1:1 row mirror at time of last refresh; try exact row first)
-  const feed = ss.getSheetByName(FEED_SHEET_NAME);
-  if (feed && rowNum && rowNum > 1) {
-    try {
-      const feedLast = feed.getLastRow();
-      if (rowNum <= feedLast) {
-        const headers = feed.getRange(1, 1, 1, feed.getLastColumn()).getValues()[0]
-          .map(h => String(h || '').toLowerCase().trim());
-        const caseIdCol = headers.findIndex(h => h.includes('case reference id') || h.includes('case id'));
-        if (caseIdCol > -1) {
-          const val = feed.getRange(rowNum, caseIdCol + 1).getValue();
-          if (String(val).trim() === String(caseId).trim()) {
-            feed.deleteRow(rowNum);
-            out.feed = { method: 'exact', rowNum };
-          }
-        }
-      }
-    } catch (e) {
-      out.feed = { error: e.message };
-    }
-  }
-
-  // Purge stale caches so next load rebuilds correctly
-  _invalidateSubmittedCache();
-  CacheService.getScriptCache().remove(HEADER_CACHE_KEY);
-  CacheService.getScriptCache().remove(FEED_REFRESH_KEY);
-
-  return out;
+function logCustomOption(field, value) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet(); var sheet = ss.getSheetByName('CustomOptions');
+    if (!sheet) { sheet = ss.insertSheet('CustomOptions'); sheet.appendRow(['Timestamp', 'Field', 'Value', 'Submitted By']); sheet.getRange(1, 1, 1, 4).setFontWeight('bold').setFrozenRows(1); }
+    sheet.appendRow([new Date(), field, value, Session.getActiveUser().getEmail()]);
+  } catch (e) { Logger.log('logCustomOption error: ' + e); }
 }
 
-// ─────────────────────────────────────────────────────────────
-// 10. HELPERS
-// ─────────────────────────────────────────────────────────────
-function _topN(obj, n) {
-  return Object.fromEntries(
-    Object.entries(obj).sort((a, b) => b[1] - a[1]).slice(0, n)
-  );
+function _removeCaseFromSource(caseId) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet(); ['Daily Input Feed', 'Daily Input'].forEach(function(name) {
+    var sh = ss.getSheetByName(name); if (!sh) return; var data = sh.getDataRange().getValues();
+    var headers = data[0].map(function(h) { return String(h || '').toLowerCase(); }); var idCol = -1;
+    for (var i = 0; i < headers.length; i++) { if (headers[i].indexOf('case reference id') > -1 || headers[i].indexOf('case id') > -1) { idCol = i; break; } }
+    if (idCol === -1) return; for (var j = data.length - 1; j >= 1; j--) { if (String(data[j][idCol]) === String(caseId)) sh.deleteRow(j + 1); }
+  });
 }
 
-function _emptyAnalytics() {
+// ============================================================
+// COLUMN INDEX, FORMAT & FILTERS
+// ============================================================
+function _buildRcaColumnIndex(hLower) {
+  function find(n) { var low = String(n).toLowerCase(); for (var i = 0; i < hLower.length; i++) if (hLower[i] === low) return i; for (var j = 0; j < hLower.length; j++) if (hLower[j].indexOf(low) > -1) return j; return -1; }
   return {
-    total: 0, retail: 0, business: 0, proactive: 0,
-    criticalDefects: 0, slaBreached: 0,
-    lockedByMe: 0, lockedByOthers: 0, sheetRows: 0,
-    defects: {}, teams: {}
+    timestamp: find('Timestamp'), conductor: find('RCA Conductor Email'), qcReviewer: find('QC Reviewer'), caseId: find('Case ID'), product: find('Product'), rcaAgree: find('QC Agree'), errorSource: find('Error Source'),
+    p1Scope: find('Phase 1 Scope (Full vs Short)'), duplicateIdentified: find('Duplicate Identified'), p1DuplicateAction: find('Offboarding Status Checked'), prevNote: find('Previous Notes/Alerts'), escalation: find('Reason for Escalation'),
+    tag: find('Risk Tags'), typology: find('Typologies'), p1MultiSuspect: find('Multi Suspects'), p1AnalystIdentified: find('Analyst Identified Suspects'),
+    p1LlmOutput: find('P1 LLM Output'), p1LlmFail: find('P1 LLM Output Fail'),
+    p2Baseline: find('P2 Baseline Pass'), p2BaselineFail: find('P2 Baseline Fail Reason'), p2Osint: find('P2 OSINT Pass'), p2OsintFail: find('P2 OSINT Fail Reason'), p2OsintDoc: find('P2 OSINT Documented in RBI'),
+    p2LlmOutput: find('P2 LLM Output'), p2LlmFail: find('P2 LLM Output Fail'),
+    p3Baseline: find('P3 Trans Baseline Pass'), p3BaselineFail: find('P3 Trans Baseline Fail'), p3Module: find('P3 Module Pass'), p3ModuleFail: find('P3 Module Fail'),
+    p3LlmOutput: find('P3 LLM Output'), p3LlmFail: find('P3 LLM Output Fail'),
+    p4ShortFull: find('P4 Short/Full Correct'), p4ReqCount: find('P4 Req Count'), p4RevCount: find('P4 Rev Count'), p4CorrectAll: find('P4 Correct All'), p4AuDetails: find('P4 AU Details'),
+    p4LlmOutput: find('P4 LLM Output'), p4LlmFail: find('P4 LLM Output Fail'),
+    p5Decision: find('P5 MS Decision Correct'), p5ActionError: find('P5 Incorrect Action'), p5Juris: find('P5 Juris Correct'), p5JurisTxt: find('P5 Juris Miss'), p5Excep: find('P5 Excep Correct'), p5ExcepTxt: find('P5 Excep Miss'), p5Biz: find('P5 Biz Matrix Correct'), p5BizTxt: find('P5 Biz Miss'),
+    p5LlmOutput: find('P5 LLM Output'), p5LlmFail: find('P5 LLM Output Fail'),
+    p6Edd: find('P6 EDD Correct'), p6EddTxt: find('P6 EDD Miss'), p6Juris: find('P6 Juris Notes Correct'), p6JurisTxt: find('P6 Juris Notes Miss'), p6Template: find('P6 Templates Correct'), p6TemplateTxt: find('P6 Templates Miss'), p6Dante: find('P6 Dante Correct'), p6DanteTxt: find('P6 Dante Miss'), p6Tags: find('P6 Tags Correct'), p6TagsTxt: find('P6 Tags Miss'), p6Alerts: find('P6 Alerts Cleared'), p6AlertsTxt: find('P6 Alerts Miss'), p6Offboard: find('P6 Offboard Correct'), p6OffboardTxt: find('P6 Offboard Miss'), p6Suspects: find('P6 Suspects Correct'), p6SuspectsTxt: find('P6 Suspects Miss'), p6Refunds: find('P6 Refunds Correct'), p6RefundsTxt: find('P6 Refunds Miss'),
+    p6LlmOutput: find('P6 LLM Output'), p6LlmFail: find('P6 LLM Output Fail'),
+    p7Vague: find('P7 Vague Claims'), p7BrokenStrings: find('P7 Broken Strings'), p7UpstreamFlags: find('P7 Upstream Flags'), p7ExtEnquiry: find('P7 External Enquiry'), negativeImpact: find('Negative Impact'),
+    binaryDefectScore: find('Binary Defect Score'), cycleWorkToQc: find('Cycle Work-to-QC (days)'), cycleQcToRca: find('Cycle QC-to-RCA (days)'),
+    outcomeDefect: find('Outcome Defect'), flagToTL: find('Flag to TL'), toBeAppealed: find('To be Appealed'), failAccepted: find('Fail Accepted'), remediationStatus: find('Remediation Status'), remediationDisagreement: find('Remediation Disagreement'), wasAppealed: find('Was Appealed'),
+    team: find('Team'), analyst: find('Analyst'), agency: find('Agency'), country: find('Country'), authority: find('Authority'), origin: find('UAR Origin'), taskType: find('Task Type'),
+    systemProcessFail: find('System Process Fail'), typologies: find('Typologies'), riskTags: find('Risk Tags'),
+    reviewDate: find('Review Done Date'), workDate: find('Work Done Date'), reviewResult: find('Review Result'), rcaComments: find('Reviewer Comments'), sysFailTxt: find('System Process Details'), suggestedUpdate: find('Suggested Update'),
+    boLink: find('BO Link'), qcLink: find('QC Link'), appealOutcome: find('Appeal Outcome')
   };
 }
 
-function _meta(payload, t0, diag) {
-  payload.duration = Date.now() - t0;
-  if (diag) {
-    payload.stages = diag.stages;
-    if (diag.usingFeed !== undefined) payload.usingFeed = diag.usingFeed;
-    payload.headersCached   = !!diag.headersCached;
-    payload.submittedCached = !!diag.submittedCached;
-    if (diag.sheetRows) payload.sheetRows = diag.sheetRows;
-  }
-  return payload;
-}
+function _fmtDate(v) { if (!v) return ''; if (v instanceof Date) { if (isNaN(v.getTime())) return ''; return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd'); } return String(v).slice(0, 10); }
 
-// ─────────────────────────────────────────────────────────────
-// 11. DIAGNOSTICS
-// ─────────────────────────────────────────────────────────────
-function diagnoseFull() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const out = {};
-  const daily = ss.getSheetByName('Daily Input');
-  const feed  = ss.getSheetByName(FEED_SHEET_NAME);
-  const rca   = ss.getSheetByName('RCA Results');
+function _matchesRcaFilters(row, colIdx, f) {
+  if (!f) return true;
+  function eq(idx, val) { if (val === '' || val == null) return true; if (idx == null || idx < 0) return false; return String(row[idx] || '').toLowerCase() === String(val).toLowerCase(); }
+  function includesAny(idx, val) { if (val === '' || val == null) return true; if (idx == null || idx < 0) return false; return String(row[idx] || '').toLowerCase().indexOf(String(val).toLowerCase()) > -1; }
+  function asBool(idx) { if (idx == null || idx < 0) return false; return String(row[idx]).toUpperCase() === 'TRUE'; }
 
-  out.dailyInputExists = !!daily;
-  out.feedSheetExists  = !!feed;
-  out.rcaResultsExists = !!rca;
-  if (daily) out.dailyInputRows = daily.getLastRow();
-  if (feed)  out.feedSheetRows  = feed.getLastRow();
-  if (rca)   out.rcaResultsRows = rca.getLastRow();
+  var dateCol = f.dateField || 'reviewDate'; var colForDate = colIdx[dateCol];
+  if (colForDate != null && colForDate >= 0) {
+    var tsRaw = row[colForDate]; var ts = tsRaw instanceof Date ? tsRaw : new Date(tsRaw);
+    if (isNaN(ts.getTime())) return false;
+    if (f.dateFrom) { var from = new Date(f.dateFrom); if (!isNaN(from.getTime()) && ts < from) return false; }
+    if (f.dateTo) { var to = new Date(f.dateTo); if (!isNaN(to.getTime())) { to.setHours(23, 59, 59, 999); if (ts > to) return false; } }
+  } else if (f.dateFrom || f.dateTo) { return false; }
 
-  if (feed) {
-    const t = Date.now();
-    try { feed.getDataRange().getValues(); } catch (e) { out.feedError = e.message; }
-    out.feedRead_ms = Date.now() - t;
-  }
-  if (daily) {
-    const t = Date.now();
-    try { daily.getDataRange().getValues(); } catch (e) { out.dailyError = e.message; }
-    out.dailyRead_ms = Date.now() - t;
-  }
-  if (rca) {
-    const t = Date.now();
-    try { rca.getDataRange().getValues(); } catch (e) { out.rcaError = e.message; }
-    out.rcaRead_ms = Date.now() - t;
-  }
+  if (!eq(colIdx.conductor, f.conductor)) return false; if (!eq(colIdx.qcReviewer, f.qcReviewer)) return false; if (!eq(colIdx.analyst, f.analyst)) return false; if (!eq(colIdx.team, f.team)) return false; if (!eq(colIdx.agency, f.agency)) return false; if (!eq(colIdx.product, f.product)) return false; if (!eq(colIdx.country, f.country)) return false; if (!eq(colIdx.authority, f.authority)) return false; if (!eq(colIdx.origin, f.origin)) return false; if (!eq(colIdx.taskType, f.taskType)) return false; if (!eq(colIdx.errorSource, f.errorSource)) return false;
 
-  Logger.log(JSON.stringify(out, null, 2));
-  return out;
-}
+  if (f.rcaAgree) { var rcaIdx = colIdx.rcaAgree, stored = ''; if (rcaIdx >= 0) { var parts = String(row[rcaIdx] || '').split(/[\s\-]/); stored = parts[0] || ''; } if (stored !== f.rcaAgree) return false; }
+  if (f.defect) { var raw = colIdx.outcomeDefect >= 0 ? String(row[colIdx.outcomeDefect] || '') : ''; if (raw !== f.defect) return false; }
+  if (f.typology && !includesAny(colIdx.typologies, f.typology)) return false; if (f.tag && !includesAny(colIdx.riskTags, f.tag)) return false;
 
-function helloWorld() { return 'It works!'; }
+  if (f.flagToTL !== undefined && f.flagToTL !== null) { if (asBool(colIdx.flagToTL) !== f.flagToTL) return false; }
+  if (f.toBeAppealed !== undefined && f.toBeAppealed !== null) { if (asBool(colIdx.toBeAppealed) !== f.toBeAppealed) return false; }
+  if (f.failAccepted !== undefined && f.failAccepted !== null) { if (asBool(colIdx.failAccepted) !== f.failAccepted) return false; }
+  if (f.alreadyAppealed !== undefined && f.alreadyAppealed !== null) { if (asBool(colIdx.wasAppealed) !== f.alreadyAppealed) return false; }
 
-
-// ═════════════════════════════════════════════════════════════
-// 12. RCA RESULTS COLUMN MIGRATION TOOL
-// ═════════════════════════════════════════════════════════════
-
-// ─── OLD VERSIONS (edit only if your version history changes) ───
-const OLD_VERSIONS = {
-
-  // 4th May 2025 — 58 columns
-  'v_4may': [
-    'Timestamp','RCA Conductor Email','QC Reviewer','Case ID','Product',
-    'Authority','Country','UAR Origin','Duplicate Identified?',
-    'Previous Notes/Alerts','Reason for Escalation','Risk Tags','Typologies',
-    'Multi Suspects?','Analyst Identified Suspects?',
-    'P2 Baseline Pass?','P2 Baseline Fail Reason','P2 OSINT Pass?','P2 OSINT Fail Reason',
-    'P3 Trans Baseline Pass?','P3 Trans Baseline Fail','P3 Module Pass?','P3 Module Fail',
-    'P4 Short/Full Correct?','P4 Req Count','P4 Rev Count','P4 Correct All?','P4 AU Details',
-    'P5 MS Decision Correct?','P5 Juris Correct?','P5 Juris Miss',
-    'P5 Excep Correct?','P5 Excep Miss','P5 Biz Matrix Correct?','P5 Biz Miss',
-    'P6 EDD Correct?','P6 EDD Miss','P6 Juris Notes Correct?','P6 Juris Notes Miss',
-    'P6 Templates Correct?','P6 Templates Miss','P6 Dante Correct?','P6 Dante Miss',
-    'P6 Tags Correct?','P6 Tags Miss','P6 Offboard Correct?','P6 Offboard Miss',
-    'P6 Suspects Correct?','P6 Suspects Miss','P6 Refunds Correct?','P6 Refunds Miss',
-    'Overall Outcome Correct?','Sys/Proc Fail?','Sys/Proc Details',
-    'QC Agree?','Error Source','Suggested Update','Reviewer Comments'
-  ],
-
-  // 15th May 2025 — 58 columns (same as 4th May)
-  'v_15may': [
-    'Timestamp','RCA Conductor Email','QC Reviewer','Case ID','Product',
-    'Authority','Country','UAR Origin','Duplicate Identified?',
-    'Previous Notes/Alerts','Reason for Escalation','Risk Tags','Typologies',
-    'Multi Suspects?','Analyst Identified Suspects?',
-    'P2 Baseline Pass?','P2 Baseline Fail Reason','P2 OSINT Pass?','P2 OSINT Fail Reason',
-    'P3 Trans Baseline Pass?','P3 Trans Baseline Fail','P3 Module Pass?','P3 Module Fail',
-    'P4 Short/Full Correct?','P4 Req Count','P4 Rev Count','P4 Correct All?','P4 AU Details',
-    'P5 MS Decision Correct?','P5 Juris Correct?','P5 Juris Miss',
-    'P5 Excep Correct?','P5 Excep Miss','P5 Biz Matrix Correct?','P5 Biz Miss',
-    'P6 EDD Correct?','P6 EDD Miss','P6 Juris Notes Correct?','P6 Juris Notes Miss',
-    'P6 Templates Correct?','P6 Templates Miss','P6 Dante Correct?','P6 Dante Miss',
-    'P6 Tags Correct?','P6 Tags Miss','P6 Offboard Correct?','P6 Offboard Miss',
-    'P6 Suspects Correct?','P6 Suspects Miss','P6 Refunds Correct?','P6 Refunds Miss',
-    'Overall Outcome Correct?','Sys/Proc Fail?','Sys/Proc Details',
-    'QC Agree?','Error Source','Suggested Update','Reviewer Comments'
-  ],
-
-  // 1st June 2025 — ~86 columns (adds action flags + context fields)
-  'v_1june': [
-    'Timestamp','RCA Conductor Email','QC Reviewer','Case ID','Product',
-    'Authority','Country','UAR Origin','If a duplicate UAR existed, was it correctly identified?',
-    'Previous Notes/Alerts','Reason for Escalation','Risk Tags','Typologies',
-    'Multi Suspects?','Analyst Identified Suspects?',
-    'P2 Baseline Pass?','P2 Baseline Fail Reason','P2 OSINT Pass?','P2 OSINT Fail Reason',
-    'P3 Trans Baseline Pass?','P3 Trans Baseline Fail','P3 Module Pass?','P3 Module Fail',
-    'P4 Short/Full Correct?','P4 Req Count','P4 Rev Count','P4 Correct All?','P4 AU Details',
-    'P5 MS Decision Correct?','P5 Juris Correct?','P5 Juris Miss',
-    'P5 Excep Correct?','P5 Excep Miss','P5 Biz Matrix Correct?','P5 Biz Miss',
-    'P6 EDD Correct?','P6 EDD Miss','P6 Juris Notes Correct?','P6 Juris Notes Miss',
-    'P6 Templates Correct?','P6 Templates Miss','P6 Dante Correct?','P6 Dante Miss',
-    'P6 Tags Correct?','P6 Tags Miss','P6 Offboard Correct?','P6 Offboard Miss',
-    'P6 Suspects Correct?','P6 Suspects Miss','P6 Refunds Correct?','P6 Refunds Miss',
-    'Overall Outcome Correct?','Sys/Proc Fail?','Sys/Proc Details',
-    'QC Agree?','Error Source','Suggested Update','Reviewer Comments',
-    'Flag to TL','To be appealed?','Fail Accepted?',
-    'Review Done Date','Work Done Date','Result','Task Type',
-    'Entity','Agency','Team','Analyst','Proactive?','Outcome Defect?','QC Keywords'
-  ],
-
-  // ⭐ 31st May 2025 — 101 columns (adds full context fields)
-  'v_31may': [
-    'Timestamp','RCA Reviewer Email','QC Name','Case ID','Product',
-    'Authority','Country','Origin','P1 Scope Correct','Duplicate Identified',
-    'P1 Duplicate Action','Previous Note','Escalation Reason','Tag Identified','Typology / Red Flag',
-    'P1 Multi Suspect','P1 Analyst Identified',
-    'P2 Baseline Checks','P2 Baseline Fail Reason','P2 OSINT Checks','P2 OSINT Fail Reason','P2 OSINT Documented',
-    'P3 Baseline Checks','P3 Baseline Fail Reason','P3 Module Checks','P3 Module Fail Reason',
-    'P4 Short/Full Correct','P4 Required Count','P4 Reviewed Count','P4 Correct All','P4 AU Details',
-    'P5 Decision Correct','P5 Action Error','P5 Jurisdictional','P5 Juris Text','P5 Exceptions','P5 Excep Text',
-    'P5 Business Matrix','P5 Biz Text',
-    'P6 EDD Correct','P6 EDD Text','P6 Juris Notes','P6 Juris Text','P6 Template Applied','P6 Template Text',
-    'P6 Dante Correct','P6 Dante Text','P6 Tags Removed','P6 Tags Text','P6 Alerts Clear','P6 Alerts Text',
-    'P6 Offboarding Correct','P6 Offboard Text','P6 Suspects Added','P6 Suspects Text','P6 Refunds','P6 Refunds Text',
-    'P7 Vague Claims','P7 Broken Strings','P7 Upstream Flags','P7 External Enquiry',
-    'RCA Outcome Agree','RCA System Fail','RCA Sys Fail Text','RCA Agree with QC','RCA Error Source',
-    'RCA Suggested Update','RCA Comments',
-    'Flag to TL','To Be Appealed','Fail Accepted',
-    'Review Done Date','Work Done Date','Review Result','Task Type','Entity Name','Agency','Team','Analyst',
-    'Proactive','Outcome Defect','QC Keywords','Scanner Red Flags',
-    'LOB','Emp Email','Entity Region','Batch ID','LM Email',
-    'Recommendations','BO Link','QC Link','Appeal Outcome','Region Grouped',
-    'Is Probation','Remediation Reqd','Was Appealed',
-    'Cycle Work to QC','Cycle QC to RCA','Binary Defect Score','Task Type Match','Correct Task Type'
-  ]
-};
-// ============================================================
-// HEADER ALIASES — KEY and VALUE are both NORMALIZED forms
-// (post-_normalize() output)
-// ============================================================
-const HEADER_ALIASES = {
-  'rca reviewer email':         'rca conductor email',
-  'qc name':                    'qc reviewer',
-  'origin':                     'uar origin',
-  'p1 scope correct':           'phase 1 scope full vs short',
-  'p1 duplicate action':        'offboarding status',
-  'previous note':              'previous notes alerts',
-  'escalation reason':          'reason for escalation',
-  'tag':                        'risk tags',
-  'typology red flag':          'typologies',
-  'p1 multi suspect':           'multi suspects',
-  'p1 analyst':                 'analyst suspects',
-  'p2 baseline checks':         'p2 baseline pass',
-  'p2 osint checks':            'p2 osint pass',
-  'p2 osint documented':        'p2 osint documented in rbi',
-  'p3 baseline checks':         'p3 trans baseline pass',
-  'p3 baseline fail reason':    'p3 trans baseline fail',
-  'p3 module checks':           'p3 module pass',
-  'p3 module fail reason':      'p3 module fail',
-  'p4 required count':          'p4 req count',
-  'p4 reviewed count':          'p4 rev count',
-  'p5 decision correct':        'p5 ms decision correct',
-  'p5 action error':            'p5 incorrect action',
-  'p5 jurisdictional':          'p5 juris correct',
-  'p5 juris text':              'p5 juris miss',
-  'p5 exceptions':              'p5 excep correct',
-  'p5 excep text':              'p5 excep miss',
-  'p5 business matrix':         'p5 biz matrix correct',
-  'p5 biz text':                'p5 biz miss',
-  'p6 edd text':                'p6 edd miss',
-  'p6 juris notes':             'p6 juris notes correct',
-  'p6 juris text':              'p6 juris notes miss',
-  'p6 template applied':        'p6 templates correct',
-  'p6 template text':           'p6 templates miss',
-  'p6 dante text':              'p6 dante miss',
-  'p6 tags removed':            'p6 tags correct',
-  'p6 tags text':               'p6 tags miss',
-  'p6 alerts clear':            'p6 alerts cleared',
-  'p6 alerts text':             'p6 alerts miss',
-  'p6 offboarding correct':     'p6 offboard correct',
-  'p6 offboard text':           'p6 offboard miss',
-  'p6 suspects added':          'p6 suspects correct',
-  'p6 suspects text':           'p6 suspects miss',
-  'p6 refunds':                 'p6 refunds correct',
-  'p6 refunds text':            'p6 refunds miss',
-  'rca outcome agree':          'rca outcome correct',
-  'rca system fail':            'system process fail',
-  'rca sys fail text':          'system process details',
-  'rca agree with qc':          'qc agree',
-  'rca error source':           'error source',
-  'rca suggested update':       'suggested update',
-  'rca comments':               'reviewer comments',
-  'emp email':                  'employee email',
-  'lm email':                   'line manager email',
-  'region grouped':             'entity region grouped',
-  'remediation reqd':           'remediation required'
-};
-// ============================================================
-// CURRENT SCHEMA — EXACT current headers from your spreadsheet
-// Verbatim, do NOT derive this from v_31may
-// ============================================================
-const CURRENT_SCHEMA = [
-  'Timestamp', 'RCA Conductor Email', 'QC Reviewer', 'Case ID', 'Product',
-  'Authority', 'Country', 'UAR Origin', 'Phase 1 Scope (Full vs Short)',
-  'Duplicate Identified', 'Offboarding Status Checked',
-  'Previous Notes/Alerts', 'Reason for Escalation', 'Risk Tags', 'Typologies',
-  'Multi Suspects', 'Analyst Identified Suspects',
-  'P2 Baseline Pass', 'P2 Baseline Fail Reason',
-  'P2 OSINT Pass', 'P2 OSINT Fail Reason', 'P2 OSINT Documented in RBI',
-  'P3 Trans Baseline Pass', 'P3 Trans Baseline Fail',
-  'P3 Module Pass', 'P3 Module Fail',
-  'P4 Short/Full Correct', 'P4 Req Count', 'P4 Rev Count',
-  'P4 Correct All', 'P4 AU Details',
-  'P5 MS Decision Correct', 'P5 Incorrect Action',
-  'P5 Juris Correct', 'P5 Juris Miss',
-  'P5 Excep Correct', 'P5 Excep Miss',
-  'P5 Biz Matrix Correct', 'P5 Biz Miss',
-  'P6 EDD Correct', 'P6 EDD Miss',
-  'P6 Juris Notes Correct', 'P6 Juris Notes Miss',
-  'P6 Templates Correct', 'P6 Templates Miss',
-  'P6 Dante Correct', 'P6 Dante Miss',
-  'P6 Tags Correct', 'P6 Tags Miss',
-  'P6 Alerts Cleared', 'P6 Alerts Miss',
-  'P6 Offboard Correct', 'P6 Offboard Miss',
-  'P6 Suspects Correct', 'P6 Suspects Miss',
-  'P6 Refunds Correct', 'P6 Refunds Miss',
-  'P7 Vague Claims', 'P7 Broken Strings', 'P7 Upstream Flags', 'P7 External Enquiry',
-  'RCA Outcome Correct', 'System Process Fail', 'System Process Details',
-  'QC Agree', 'Error Source', 'Suggested Update', 'Reviewer Comments',
-  'Flag to TL', 'To be Appealed', 'Fail Accepted',
-  'Review Done Date', 'Work Done Date', 'Review Result', 'Task Type',
-  'Entity Name', 'Agency', 'Team', 'Analyst',
-  'Proactive', 'Outcome Defect', 'QC Keywords', 'Scanner Red Flags',
-  'LOB', 'Employee Email', 'Entity Region', 'Batch ID', 'Line Manager Email',
-  'Recommendations', 'BO Link', 'QC Link', 'Appeal Outcome',
-  'Entity Region Grouped',
-  'Is Probation', 'Remediation Required', 'Was Appealed',
-  'Cycle Work-to-QC (days)', 'Cycle QC-to-RCA (days)',
-  'Binary Defect Score', 'Task Type Match', 'Correct Task Type'
-];
-// ─── MAIN: Setup current headers (run once) ───
-function setupCurrentHeaders() {
-  const hasUi = _hasUi();
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName('RCA Results');
-  if (!sheet) {
-    _log(hasUi, 'Error', '❌ Sheet "RCA Results" not found.');
-    return { success: false };
-  }
-
-  if (hasUi) {
-    const response = SpreadsheetApp.getUi().alert(
-      'Setup current headers?',
-      `This will OVERWRITE row 1 of "RCA Results" with ${CURRENT_SCHEMA.length} current column headers.\n\nA backup will be created first. Continue?`,
-      SpreadsheetApp.getUi().ButtonSet.YES_NO
-    );
-    if (response !== SpreadsheetApp.getUi().Button.YES) return { success: false, error: 'Cancelled' };
-  } else {
-    console.log(`[Setup Headers] Will write ${CURRENT_SCHEMA.length} headers to row 1. Proceeding...`);
-  }
-
-  // Backup
-  const stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HHmm');
-  const backup = sheet.copyTo(ss);
-  backup.setName(`RCA Results HEADER-BACKUP ${stamp}`);
-
-  // Pad headers to current sheet width so we don't shrink columns
-  const currentWidth = sheet.getLastColumn();
-  const headers = [...CURRENT_SCHEMA];
-  while (headers.length < currentWidth) headers.push('');
-
-  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-  sheet.setFrozenRows(1);
-
-  // Format header row
-  const headerRange = sheet.getRange(1, 1, 1, CURRENT_SCHEMA.length);
-  headerRange.setFontWeight('bold');
-  headerRange.setBackground('#5B47E0');
-  headerRange.setFontColor('#FFFFFF');
-
-  _log(hasUi, '✅ Headers installed',
-    `Row 1 now has ${CURRENT_SCHEMA.length} headers.\n📦 Backup: "RCA Results HEADER-BACKUP ${stamp}"`);
-
-  return { success: true, columns: CURRENT_SCHEMA.length };
-}
-
-// ─── MAIN: Migrate rows to current schema ───
-function migrateRcaResults() {
-  const hasUi = _hasUi();
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName('RCA Results');
-  if (!sheet) {
-    _log(hasUi, 'Error', '❌ Sheet "RCA Results" not found.');
-    return { success: false };
-  }
-
-  const providedVersions = Object.entries(OLD_VERSIONS).filter(([_, h]) => Array.isArray(h) && h.length > 0);
-  if (providedVersions.length === 0) {
-    _log(hasUi, 'Config needed', '⚠️ OLD_VERSIONS is empty.');
-    return { success: false };
-  }
-
-  // Backup
-  const stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HHmm');
-  const backupName = `RCA Results BACKUP ${stamp}`;
-  const backup = sheet.copyTo(ss);
-  backup.setName(backupName);
-  ss.setActiveSheet(backup);
-  ss.moveActiveSheet(1);
-  SpreadsheetApp.flush();
-
-  // Read current schema
-  const currentHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const numCols = currentHeaders.length;
-  const currentNorm = currentHeaders.map(_normalize);
-
-  // Build version registry
-  const versions = [];
-  providedVersions.forEach(([key, headers]) => {
-    versions.push({ key, schema: headers.map(_normalize), raw: headers });
-  });
-
-  // Read data
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) {
-    _log(hasUi, 'Empty sheet', 'No data rows to migrate.');
-    return { success: false };
-  }
-  const values = sheet.getRange(2, 1, lastRow - 1, numCols).getValues();
-
-  // Process rows
-  const plan = [];
-  const stats = { totalRows: values.length, byVersion: {}, unmapped: [], aliasUsed: {}, errors: [] };
-
-  values.forEach((row, idx) => {
-    const rowNum = idx + 2;
-    if (row.every(c => c === '' || c === null)) {
-      stats.byVersion['__empty__'] = (stats.byVersion['__empty__'] || 0) + 1;
-      return;
+  if (f.investigationPhase) {
+    var phaseNum = parseInt(String(f.investigationPhase).replace(/\D/g, ''), 10);
+    if (phaseNum >= 1 && phaseNum <= 7) {
+      var anyFail = false;
+      for (var pi = 0; pi < PHASE_QUESTION_CONFIG.length; pi++) { var cfg = PHASE_QUESTION_CONFIG[pi]; if (cfg.phase !== phaseNum) continue; var pidx = colIdx[cfg.key]; if (pidx == null || pidx < 0) continue; if (String(row[pidx] || '') === cfg.failValue) { anyFail = true; break; } }
+      if (!anyFail) return false;
     }
-
-    const detection = _detectVersion(row, versions);
-    stats.byVersion[detection.key] = (stats.byVersion[detection.key] || 0) + 1;
-
-    const mapping = _buildMapping(detection.version.schema, currentNorm);
-
-    // Track alias usage
-    detection.version.schema.forEach((oldH, oldIdx) => {
-      if (HEADER_ALIASES[oldH]) {
-        stats.aliasUsed[oldH] = (stats.aliasUsed[oldH] || 0) + 1;
-      }
-    });
-
-    // Track unmapped columns
-    const unmappedOld = detection.version.schema
-      .map((h, i) => ({ idx: i, name: detection.version.raw[i] }))
-      .filter(({ idx, name }) => mapping.every(src => src !== idx) && name);
-    if (unmappedOld.length > 0) {
-      stats.unmapped.push({ row: rowNum, version: detection.key, columns: unmappedOld.map(u => u.name) });
-    }
-
-    const newRow = _applyMapping(row, mapping, numCols);
-    const oldCaseId = _findCaseId(row, detection.version.schema);
-    const newCaseId = _findCaseId(newRow, currentNorm);
-
-    plan.push({ rowNum, version: detection.key, confidence: detection.confidence, oldCaseId, newCaseId, newRow });
-  });
-
-  // Preview
-  const preview = _formatPreview(stats, plan);
-
-  if (hasUi) {
-    const response = SpreadsheetApp.getUi().alert(
-      'Migration Preview', preview + `\n\nApply?\n(Backup: "${backupName}")`,
-      SpreadsheetApp.getUi().ButtonSet.YES_NO);
-    if (response !== SpreadsheetApp.getUi().Button.YES) {
-      SpreadsheetApp.getUi().alert('Cancelled', 'No changes. Backup preserved.', SpreadsheetApp.getUi().ButtonSet.OK);
-      return { success: false };
-    }
-  } else {
-    console.log('=== MIGRATION PREVIEW (editor run) ===\n' + preview);
-    console.log(`Backup: ${backupName}`);
   }
 
-  // Apply
-  const BATCH = 50;
-  for (let i = 0; i < plan.length; i += BATCH) {
-    plan.slice(i, i + BATCH).forEach(item => {
-      sheet.getRange(item.rowNum, 1, 1, numCols).setValues([item.newRow]);
-    });
-    SpreadsheetApp.flush();
-  }
-
-  // Summary
-  const summary = [
-    `✅ Migrated ${plan.length} rows.`,
-    `📦 Backup: "${backupName}"`,
-    '',
-    'Versions detected:',
-    ...Object.entries(stats.byVersion).map(([v, c]) => `  ${v}: ${c}`),
-    '',
-    `Aliases resolved: ${Object.keys(stats.aliasUsed).length} distinct renames`,
-    stats.unmapped.length ? `\n⚠️ ${stats.unmapped.length} rows had unmapped columns.` : ''
-  ].filter(Boolean).join('\n');
-
-  _log(hasUi, '✅ Migration complete', summary);
-
-  // Detailed logs
-  console.log('=== ALIAS USAGE ===');
-  Object.entries(stats.aliasUsed).sort((a, b) => b[1] - a[1]).forEach(([k, v]) => {
-    console.log(`  ${k} → ${HEADER_ALIASES[k]}  (used ${v} times)`);
-  });
-
-  if (stats.unmapped.length > 0) {
-    console.log('=== UNMAPPED COLUMNS ===');
-    stats.unmapped.forEach(u => console.log(`Row ${u.row} (${u.version}): ${u.columns.join(', ')}`));
-  }
-
-  return { success: true, migrated: plan.length, stats };
-}
-
-// ─── MIGRATION HELPERS ───
-function _hasUi() {
-  try { SpreadsheetApp.getUi(); return true; }
-  catch (e) { return false; }
-}
-
-function _log(hasUi, title, message) {
-  if (hasUi) SpreadsheetApp.getUi().alert(title, message, SpreadsheetApp.getUi().ButtonSet.OK);
-  else { console.log(`[${title}]`); console.log(message); console.log('---'); }
-}
-
-function _normalize(s) {
-  return String(s || '')
-    .toLowerCase()
-    .trim()
-    .replace(/^if\s+a\s+.+?,\s*(was|is|were|are|did)\s+/i, '')
-    .replace(/^(was|is|did|are)\s+/i, '')
-    .replace(/\?$/, '')
-    .replace(/$[^)]*$/g, '')        // ← FIXED: strips "(days)", "(Full vs Short)", etc.
-    .replace(/\b(correctly|identified|checked)\b/g, '')
-    .replace(/[\/\-]+/g, ' ')
-    .replace(/[^\w\s]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function _detectVersion(row, versions) {
-  let best = { key: '__unknown__', version: null, confidence: -1 };
-  versions.forEach(v => {
-    const score = _scoreRow(row, v.schema);
-    if (score > best.confidence) best = { key: v.key, version: v, confidence: score };
-  });
-  return best;
-}
-
-function _scoreRow(row, schema) {
-  let score = 0;
-  const n = Math.min(row.length, schema.length);
-  for (let i = 0; i < n; i++) {
-    const cell = row[i];
-    const h = schema[i] || '';
-    if (cell === '' || cell === null) continue;
-    if (h.includes('email'))    { if (typeof cell === 'string' && /@/.test(cell)) score += 3; }
-    else if (h.includes('date')){ if (cell instanceof Date || /\d{4}-\d{2}-\d{2}/.test(cell)) score += 3; }
-    else if (h.includes('link') || h.includes('url')) { if (/^https?:\/\//.test(cell)) score += 3; }
-    else if (/(flag|appeal|accept|probation|remediation|was appealed)/.test(h)) {
-      if (cell === true || cell === false || cell === 'TRUE' || cell === 'FALSE') score += 2;
-    }
-    else if (/(count|cycle|score)/.test(h)) { if (!isNaN(parseFloat(cell))) score += 1; }
-    else if (typeof cell === 'string' && cell.length > 0) score += 0.1;
-  }
-  return score;
-}
-
-function _buildMapping(oldSchema, newSchema) {
-  const mapping = new Array(newSchema.length).fill(-1);
-
-  oldSchema.forEach((oldHeader, oldIdx) => {
-    if (!oldHeader) return;
-
-    // Step 1: Try alias lookup first (most reliable for known renames)
-    let resolved = HEADER_ALIASES[oldHeader] || oldHeader;
-
-    // Step 2: Exact match against current schema
-    let newIdx = newSchema.indexOf(resolved);
-
-    // Step 3: Fuzzy fallback — contains match (only for headers long enough to avoid false positives)
-    if (newIdx < 0) {
-      newIdx = newSchema.findIndex(h => h && h.includes(resolved) && resolved.length > 4);
-    }
-    if (newIdx < 0 && resolved !== oldHeader) {
-      newIdx = newSchema.findIndex(h => h && h.includes(oldHeader) && oldHeader.length > 4);
-    }
-
-    // Assign only if not already taken
-    if (newIdx > -1 && mapping[newIdx] === -1) {
-      mapping[newIdx] = oldIdx;
-    }
-  });
-
-  return mapping;
-}
-
-function _applyMapping(row, mapping, numCols) {
-  const newRow = new Array(numCols).fill('');
-  mapping.forEach((oldIdx, newIdx) => {
-    if (oldIdx > -1 && oldIdx < row.length) newRow[newIdx] = row[oldIdx];
-  });
-  return newRow;
-}
-
-function _findCaseId(row, schema) {
-  for (const c of ['case id', 'case reference id', 'uar id']) {
-    const i = schema.indexOf(c);
-    if (i > -1 && row[i]) return String(row[i]).trim();
-  }
-  return '';
-}
-
-function _formatPreview(stats, plan) {
-  const lines = [];
-  lines.push(`Total rows: ${stats.totalRows}`);
-  lines.push('');
-  lines.push('Detected versions:');
-  Object.entries(stats.byVersion).forEach(([v, c]) => lines.push(`  • ${v}: ${c} rows`));
-  if (stats.unmapped.length > 0) {
-    lines.push('');
-    lines.push(`⚠️ ${stats.unmapped.length} rows have unmapped columns:`);
-    stats.unmapped.slice(0, 5).forEach(u => {
-      lines.push(`   Row ${u.row} (${u.version}): ${u.columns.join(', ')}`);
-    });
-    if (stats.unmapped.length > 5) lines.push(`   ...and ${stats.unmapped.length - 5} more (see Logs)`);
-  }
-  lines.push('');
-  lines.push('Sample case ID survival (first 3):');
-  plan.slice(0, 3).forEach(p => {
-    const ok = p.oldCaseId === p.newCaseId ? '✓' : '✗';
-    lines.push(`  Row ${p.rowNum} [${p.version}] ${ok} ${p.oldCaseId || '(none)'} → ${p.newCaseId || '(none)'}`);
-  });
-  return lines.join('\n');
-}
-
-// ─── OPTIONAL: Write migration report to a new sheet ───
-function writeMigrationReport() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName('RCA Results');
-  if (!sheet) return;
-
-  const currentHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const numCols = currentHeaders.length;
-  const currentNorm = currentHeaders.map(_normalize);
-  const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, numCols).getValues();
-
-  const versions = [];
-  Object.entries(OLD_VERSIONS).filter(([_, h]) => Array.isArray(h) && h.length > 0)
-    .forEach(([key, headers]) => versions.push({ key, schema: headers.map(_normalize) }));
-
-  const report = [['Row #', 'Detected Version', 'Old Case ID', 'New Case ID', 'Status']];
-  values.forEach((row, idx) => {
-    const rowNum = idx + 2;
-    if (row.every(c => c === '' || c === null)) return;
-    const det = _detectVersion(row, versions);
-    const mapping = _buildMapping(det.version.schema, currentNorm);
-    const newRow = _applyMapping(row, mapping, numCols);
-    const oldId = _findCaseId(row, det.version.schema);
-    const newId = _findCaseId(newRow, currentNorm);
-    const status = (!oldId || oldId === newId) ? 'OK' : 'MISMATCH';
-    report.push([rowNum, det.key, oldId, newId, status]);
-  });
-
-  const name = `RCA Migration Report ${Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HHmm')}`;
-  const rs = ss.insertSheet(name);
-  rs.getRange(1, 1, report.length, 5).setValues(report);
-  const hdr = rs.getRange(1, 1, 1, 5);
-  hdr.setFontWeight('bold').setBackground('#5B47E0').setFontColor('#FFFFFF');
-  rs.setFrozenRows(1);
-  rs.autoResizeColumns(1, 5);
-  console.log(`Report written: ${name}`);
-}
-
-// ─── Custom menu (runs on sheet open) ───
-function onOpen() {
-  try {
-    SpreadsheetApp.getUi()
-      .createMenu('🔧 RCA Tools')
-      .addItem('📋 Setup current headers (one-time)', 'setupCurrentHeaders')
-      .addItem('🔄 Migrate RCA Results columns', 'migrateRcaResults')
-      .addSeparator()
-      .addItem('📊 Write migration report sheet', 'writeMigrationReport')
-      .addItem('🔍 Inspect row', 'promptInspectRow')
-      .addToUi();
-  } catch (e) { /* no UI — running headless */ }
-}
-
-function promptInspectRow() {
-  const ui = SpreadsheetApp.getUi();
-  const resp = ui.prompt('Inspect row', 'Enter row number:', ui.ButtonSet.OK_CANCEL);
-  if (resp.getSelectedButton() === ui.Button.OK) _inspectRcaRow(parseInt(resp.getResponseText()));
-}
-
-function _inspectRcaRow(rowNum) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName('RCA Results');
-  if (!sheet) return 'No RCA Results sheet';
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const row = sheet.getRange(rowNum, 1, 1, headers.length).getValues()[0];
-  console.log(`Row ${rowNum}:`);
-  headers.forEach((h, i) => {
-    if (row[i] !== '' && row[i] !== null) console.log(`  [${i+1}] ${h} = ${JSON.stringify(row[i])}`);
-  });
-  return 'Logged. View → Logs (Ctrl+Enter).';
-}
-// ═════════════════════════════════════════════════════════════
-// 13. RCA RESULTS ANALYTICS
-// ═════════════════════════════════════════════════════════════
-
-function getRcaAnalytics(filters) {
-  const t0 = Date.now();
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName('RCA Results');
-    if (!sheet) return _meta({ success: false, error: 'RCA Results sheet not found' }, t0);
-
-    const data = sheet.getDataRange().getValues();
-    if (data.length < 2) return _meta({ success: true, empty: true, analytics: _emptyRcaAnalytics() }, t0);
-
-    const headers = data[0].map(h => (h || '').toString());
-    const colIdx  = _buildRcaColumnIndex(headers);
-
-    // Apply filters
-    const filtered = data.slice(1).filter(row => _matchesRcaFilters(row, colIdx, filters || {}));
-    const analytics = _aggregateRcaResults(filtered, colIdx);
-
-    return _meta({ success: true, analytics, total: filtered.length }, t0);
-  } catch (e) {
-    return _meta({ success: false, error: e.message }, t0);
-  }
-}
-function getRcaResultsTable(filters, page, pageSize) {
-  const t0 = Date.now();
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName('RCA Results');
-    if (!sheet) return _meta({ success: false, error: 'RCA Results sheet not found' }, t0);
-
-    const data = sheet.getDataRange().getValues();
-    if (data.length < 2) return _meta({ success: true, rows: [], total: 0 }, t0);
-
-    const headers = data[0].map(h => (h || '').toString());
-    const colIdx  = _buildRcaColumnIndex(headers);
-
-    // Apply filters
-    const filtered = data.slice(1).filter(row => _matchesRcaFilters(row, colIdx, filters || {}));
-
-    // Sort newest first
-    filtered.sort((a, b) => {
-      const ta = colIdx.timestamp > -1 ? new Date(a[colIdx.timestamp]).getTime() : 0;
-      const tb = colIdx.timestamp > -1 ? new Date(b[colIdx.timestamp]).getTime() : 0;
-      return tb - ta;
-    });
-
-    // Paginate
-    page     = page || 1;
-    pageSize = pageSize || 25;
-    const start = (page - 1) * pageSize;
-    const end   = Math.min(start + pageSize, filtered.length);
-    const slice = filtered.slice(start, end);
-
-    const rows = slice.map((row, idx) => ({
-      rowNum:         start + idx + 2,
-      timestamp:      _fmtDate(row[colIdx.timestamp]),
-      conductor:      colIdx.conductor   > -1 ? String(row[colIdx.conductor]   || '') : '',
-      qcReviewer:     colIdx.qcReviewer  > -1 ? String(row[colIdx.qcReviewer]  || '') : '',
-      caseId:         colIdx.caseId      > -1 ? String(row[colIdx.caseId]      || '') : '',
-      product:        colIdx.product     > -1 ? String(row[colIdx.product]     || '') : '',
-      authority:      colIdx.authority   > -1 ? String(row[colIdx.authority]   || '') : '',
-      country:        colIdx.country     > -1 ? String(row[colIdx.country]     || '') : '',
-      origin:         colIdx.origin      > -1 ? String(row[colIdx.origin]      || '') : '',
-      defect:         _classifyDefect(row, colIdx),
-      analyst:        colIdx.analyst     > -1 ? String(row[colIdx.analyst]     || '') : '',
-      team:           colIdx.team        > -1 ? String(row[colIdx.team]        || '') : '',
-      agency:         colIdx.agency      > -1 ? String(row[colIdx.agency]      || '') : '',
-      taskType:       colIdx.taskType    > -1 ? String(row[colIdx.taskType]    || '') : '',
-      errorSource:    colIdx.errorSource > -1 ? String(row[colIdx.errorSource] || '') : '',
-      rcaOutcome:     colIdx.rcaOutcome  > -1 ? String(row[colIdx.rcaOutcome]  || '') : '',
-      rcaAgree:       colIdx.rcaAgree    > -1 ? String(row[colIdx.rcaAgree]    || '') : '',
-      flagToTL:       _toBool(row[colIdx.flagToTL]),
-      toBeAppealed:   _toBool(row[colIdx.toBeAppealed]),
-      failAccepted:   _toBool(row[colIdx.failAccepted]),
-      reviewDate:     _fmtDate(row[colIdx.reviewDate]),
-      workDate:       _fmtDate(row[colIdx.workDate]),
-      cycleWorkToQc:  colIdx.cycleWorkToQc > -1 ? row[colIdx.cycleWorkToQc] : '',
-      cycleQcToRca:   colIdx.cycleQcToRca  > -1 ? row[colIdx.cycleQcToRca]  : '',
-      binaryDefectScore: colIdx.binaryDefectScore > -1 ? row[colIdx.binaryDefectScore] : '',
-      comments:        colIdx.rcaComments   > -1 ? String(row[colIdx.rcaComments]   || '') : '',
-      sysFailTxt:      colIdx.rcaSysFailTxt > -1 ? String(row[colIdx.rcaSysFailTxt] || '') : '',
-      suggestedUpdate: colIdx.rcaUpdate     > -1 ? String(row[colIdx.rcaUpdate]     || '') : '',
-      boLink:          colIdx.boLink        > -1 ? String(row[colIdx.boLink]        || '') : '',
-      qcLink:          colIdx.qcLink        > -1 ? String(row[colIdx.qcLink]        || '') : '',
-      typology:        colIdx.typology      > -1 ? String(row[colIdx.typology]      || '') : '',
-      riskTags:        colIdx.tag           > -1 ? String(row[colIdx.tag]           || '') : ''
-    }));
-
-    return _meta({ success: true, rows, total: filtered.length, page, pageSize }, t0);
-  } catch (e) {
-    return _meta({ success: false, error: e.message || e.toString() }, t0);
-  }
-}
-// ============================================================
-// MATCH MULTI-SELECT CELL AGAINST FILTER VALUE(S)
-// Typology and Risk Tag columns store "A, B, C" — so a filter
-// for "Money Laundering" must do contains-style matching.
-// ============================================================
-function _matchesMultiSelect(cellVal, filterVal) {
-  if (!filterVal) return true;
-  if (!cellVal)  return false;
-  const targets  = String(filterVal).toLowerCase().split(',').map(s => s.trim()).filter(Boolean);
-  const cellItems = String(cellVal).toLowerCase().split(/[,;|]/).map(s => s.trim());
-  return targets.some(t => cellItems.includes(t));
-}
-function _buildRcaColumnIndex(headers) {
-  const norm = headers.map(h => h.toLowerCase().trim());
-  const find = (...names) => {
-    for (const n of names) {
-      const i = norm.findIndex(h => h === n);
-      if (i > -1) return i;
-    }
-    for (const n of names) {
-      const i = norm.findIndex(h => h.includes(n));
-      if (i > -1) return i;
-    }
-    return -1;
-  };
-  return {
-    // Dates
-    timestamp:          find('timestamp', 'submission date'),
-    reviewDate:         find('review done date'),
-    workDate:           find('work done date'),
-
-    // People
-    conductor:          find('rca conductor email', 'reviewer email', 'reviewer'),
-    qcReviewer:         find('qc reviewer', 'qc name'),
-    analyst:            find('analyst', 'employee name'),
-
-    // Identifiers
-    caseId:             find('case id', 'case reference id'),
-
-    // Categorical
-    product:            find('product'),
-    authority:          find('authority'),
-    country:            find('country'),
-    origin:             find('uar origin', 'origin'),
-    taskType:           find('task type'),
-    team:               find('team', 'subteam'),
-    agency:             find('agency'),
-    lob:                find('lob'),
-    entityRegion:       find('entity region'),
-
-    // Phase 1
-    p1Scope:            find('phase 1 scope', 'p1 scope'),
-    duplicateIdentified: find('duplicate identified', 'duplicate'),
-    p1DuplicateAction:  find('offboarding status', 'p1 duplicate action'),
-    typology:           find('typologies', 'typology'),
-    tag:                find('risk tags', 'tag'),
-
-    // Phase 2-5
-    p2Baseline:         find('p2 baseline pass', 'p2 baseline'),
-    p2Osint:            find('p2 osint pass', 'p2 osint'),
-    p3Baseline:         find('p3 trans baseline pass', 'p3 baseline'),
-    p3Module:           find('p3 module pass', 'p3 module'),
-    p4ShortFull:        find('p4 short/full correct', 'p4 short full correct'),
-    p4CorrectAll:       find('p4 correct all'),
-    p5Decision:         find('p5 ms decision correct', 'p5 decision correct'),
-
-    // RCA Findings
-    rcaOutcome:         find('rca outcome correct', 'overall outcome correct'),
-    rcaAgree:           find('qc agree'),
-    errorSource:        find('error source', 'rca error source'),
-    rcaSysFail:         find('system process fail', 'sys/proc fail', 'system/proc fail'),
-    rcaSysFailTxt:      find('system process details', 'sys/proc details', 'rca sys fail text'),
-    rcaComments:        find('reviewer comments', 'rca comments'),
-    rcaUpdate:          find('suggested update', 'rca suggested update'),
-    binaryDefectScore:  find('binary defect score'),
-
-    // Flags
-    flagToTL:           find('flag to tl'),
-    toBeAppealed:       find('to be appealed'),
-    failAccepted:       find('fail accepted'),
-
-    // Cycle time
-    cycleWorkToQc:      find('cycle work-to-qc'),
-    cycleQcToRca:       find('cycle qc-to-rca'),
-
-    // Links
-    boLink:             find('bo link'),
-    qcLink:             find('qc link'),
-
-    // Misc text
-    entity:             find('entity name', 'entity'),
-    appealOutcome:      find('appeal outcome'),
-    qcKeywords:         find('qc keywords'),
-    scannerRedFlags:    find('scanner red flags'),
-    empEmail:           find('employee email'),
-    lmEmail:            find('line manager email'),
-    batchId:            find('batch id'),
-
-    // Phase failure text fields (for Pareto & heatmap)
-    p2BaselineFail: find('p2 baseline fail reason'),
-    p2OsintFail:    find('p2 osint fail reason'),
-    p3BaselineFail: find('p3 trans baseline fail'),
-    p3ModuleFail:   find('p3 module fail'),
-    p5ActionError:  find('p5 incorrect action'),
-    p5JurisTxt:     find('p5 juris miss'),
-    p5ExcepTxt:     find('p5 excep miss'),
-    p5BizTxt:       find('p5 biz miss'),
-    p6EddTxt:       find('p6 edd miss'),
-    p6JurisTxt:     find('p6 juris notes miss'),
-    p6TemplateTxt:  find('p6 templates miss'),
-    p6DanteTxt:     find('p6 dante miss'),
-    p6TagsTxt:      find('p6 tags miss'),
-    p6AlertsTxt:    find('p6 alerts miss'),
-    p6OffboardTxt:  find('p6 offboard miss'),
-    p6SuspectsTxt:  find('p6 suspects miss'),
-    p6RefundsTxt:   find('p6 refunds miss'),
-    p7Vague:        find('p7 vague claims'),
-    p7BrokenStrings:find('p7 broken strings'),
-    p7UpstreamFlags:find('p7 upstream flags'),
-    p7ExtEnquiry:   find('p7 external enquiry')
-  };
-}
-function _matchesRcaFilters(row, colIdx, filters) {
-  if (!filters) return true;
-
-  const inDateRange = (val, from, to) => {
-    if (!from && !to) return true;
-    if (!val) return false;
-    const d = new Date(val);
-    if (isNaN(d.getTime())) return false;
-    if (from && d < new Date(from)) return false;
-    if (to   && d > new Date(to + 'T23:59:59')) return false;
-    return true;
-  };
-
-  // Date range — apply to user-selected date column
-  const dateField = filters.dateField || 'timestamp';
-  const dateCol =
-      dateField === 'reviewDate' ? colIdx.reviewDate
-    : dateField === 'workDate'   ? colIdx.workDate
-    : colIdx.timestamp;
-  if (!inDateRange(dateCol > -1 ? row[dateCol] : null, filters.dateFrom, filters.dateTo)) return false;
-
-  // Categorical exact-match filters
-  const checks = [
-    ['conductor',   colIdx.conductor,   filters.conductor],
-    ['qcReviewer',  colIdx.qcReviewer,  filters.qcReviewer],
-    ['analyst',     colIdx.analyst,     filters.analyst],
-    ['team',        colIdx.team,        filters.team],
-    ['agency',      colIdx.agency,      filters.agency],
-    ['product',     colIdx.product,     filters.product],
-    ['country',     colIdx.country,     filters.country],
-    ['authority',   colIdx.authority,   filters.authority],
-    ['origin',      colIdx.origin,      filters.origin],
-    ['taskType',    colIdx.taskType,    filters.taskType],
-    ['lob',         colIdx.lob,         filters.lob],
-    ['errorSource', colIdx.errorSource, filters.errorSource],
-    ['rcaAgree',    colIdx.rcaAgree,    filters.rcaAgree]
-  ];
-  for (const [, idx, val] of checks) {
-    if (val && idx > -1 && String(row[idx] || '').trim() !== val) return false;
-  }
-
-  // Multi-select filters (comma-separated cells)
-  if (filters.typology && colIdx.typology > -1 &&
-      !_matchesMultiSelect(row[colIdx.typology], filters.typology)) return false;
-  if (filters.tag && colIdx.tag > -1 &&
-      !_matchesMultiSelect(row[colIdx.tag], filters.tag)) return false;
-
-  // Boolean flags (only filter if explicitly set)
-  if (filters.flagToTL     !== undefined && filters.flagToTL     !== '' && _toBool(row[colIdx.flagToTL])     !== filters.flagToTL)     return false;
-  if (filters.toBeAppealed !== undefined && filters.toBeAppealed !== '' && _toBool(row[colIdx.toBeAppealed]) !== filters.toBeAppealed) return false;
-  if (filters.failAccepted !== undefined && filters.failAccepted !== '' && _toBool(row[colIdx.failAccepted]) !== filters.failAccepted) return false;
-
-  // Full-text search across key fields
-  if (filters.search) {
-    const s = filters.search.toLowerCase();
-    const haystack = [
-      colIdx.caseId, colIdx.conductor, colIdx.qcReviewer, colIdx.analyst,
-      colIdx.rcaComments, colIdx.rcaUpdate, colIdx.rcaSysFailTxt
-    ].filter(i => i > -1).map(i => String(row[i] || '').toLowerCase()).join(' | ');
-    if (!haystack.includes(s)) return false;
-  }
-
+  if (f.search) { var s = String(f.search).toLowerCase(), hay = ''; for (var hi = 0; hi < row.length; hi++) { hay += String(row[hi] == null ? '' : row[hi]) + ' '; } if (hay.toLowerCase().indexOf(s) === -1) return false; }
   return true;
 }
 
-function _classifyDefect(row, colIdx) {
-  const outcome = colIdx.rcaOutcome > -1 ? String(row[colIdx.rcaOutcome] || '').trim() : '';
-  if (outcome === 'No') return 'Critical';
-  if (outcome === 'Yes') return 'None';
-  return 'Unknown';
+// ============================================================
+// ANALYTICS
+// ============================================================
+function getRcaAnalytics(filters) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet(); var sheet = ss.getSheetByName(SHEET_NAME_RCA);
+    if (!sheet) return { success: false, error: 'Sheet not found' };
+    var data = sheet.getDataRange().getValues(); var hLower = data[0].map(function(h) { return String(h || '').toLowerCase().trim(); });
+    var colIdx = _buildRcaColumnIndex(hLower); var filtered = data.slice(1).filter(function(row) { return _matchesRcaFilters(row, colIdx, filters || {}); });
+    
+    // Fetch Daily Input defects to merge if RCA results lack them
+    var feedSheet = ss.getSheetByName(FEED_SHEET_NAME) || ss.getSheetByName('Daily Input');
+    var feedDefects = {};
+    if (feedSheet) {
+      var feedData = feedSheet.getDataRange().getValues();
+      var fLower = feedData[0].map(function(h) { return String(h||'').toLowerCase(); });
+      var idCol = fLower.indexOf('case reference id') > -1 ? fLower.indexOf('case reference id') : fLower.indexOf('case id');
+      var defCol = fLower.indexOf('defect') > -1 ? fLower.indexOf('defect') : fLower.indexOf('outcome defect');
+      if (idCol > -1 && defCol > -1) { for (var i=1; i<feedData.length; i++) { feedDefects[String(feedData[i][idCol])] = String(feedData[i][defCol]); } }
+    }
+    
+    return { success: true, analytics: _aggregateRcaResults(filtered, colIdx, feedDefects), total: filtered.length };
+  } catch (e) { Logger.log('getRcaAnalytics error: ' + e.toString()); return { success: false, error: e.toString() }; }
 }
 
-function _toBool(v) {
-  return v === true || v === 'TRUE' || v === 'Yes' || v === 'true';
-}
-
-function _aggregateRcaResults(rows, colIdx) {
-  const now = new Date();
-  const weekAgo  = new Date(now.getTime() - 7  * 86400000);
-  const monthAgo = new Date(now.getTime() - 30 * 86400000);
-
-  const stats = _emptyRcaAnalytics();
-  const dailyTrend = {}, weeklyTrend = {}, monthlyTrend = {};
-
-  // New accumulators for extended analytics
-  const dailyDefects = {};
-  const failureReasons = {};
-  const analystMatrix = {};
-  const phaseMonthMatrix = {};
-
-  const phaseFailure = {
-    p2Baseline:   { pass: 0, fail: 0, total: 0, failRate: 0 },
-    p2Osint:      { pass: 0, fail: 0, total: 0, failRate: 0 },
-    p3Baseline:   { pass: 0, fail: 0, total: 0, failRate: 0 },
-    p3Module:     { pass: 0, fail: 0, total: 0, failRate: 0 },
-    p4ShortFull:  { pass: 0, fail: 0, total: 0, failRate: 0 },
-    p4CorrectAll: { pass: 0, fail: 0, total: 0, failRate: 0 },
-    p5Decision:   { pass: 0, fail: 0, total: 0, failRate: 0 }
+function _aggregateRcaResults(rows, colIdx, feedDefects) {
+  var now = new Date(), weekAgo = new Date(now.getTime() - 7 * 86400000), monthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+  var stats = {
+    total: rows.length, thisWeek: 0, thisMonth: 0, avgPerDay: 0, agreementRate: 0, agreementBreakdown: { yes: 0, no: 0, other: 0 },
+    cycleTime: { avgWorkToQc: 0, avgQcToRca: 0 }, trendDaily: [], trendWeekly: [], trendMonthly: [], trendDailyByDefect: [], cycleTimeTrendWeekly: [],
+    cascading: {}, agreementTrendDaily: {}, byDefect: {}, byTeam: {}, byConductor: {}, byQcReviewer: {}, byAnalyst: {}, byAgency: {}, byProduct: {}, byCountry: {}, byAuthority: {}, byOrigin: {}, byTaskType: {}, byErrorSource: {},
+    topConductors: {}, topQcReviewers: {}, topTypologies: {}, topRiskTags: {},
+    criticalCount: 0, criticalRate: 0, avgDefectScore: 0, flagRate: 0, flagged: { flagToTL: 0, toBeAppealed: 0, failAccepted: 0, wasAppealed: 0 }, appealRate: 0,
+    phaseFailure: {}, systemicVsHuman: { humanOnly: 0, systemOnly: 0, both: 0, neither: 0, unknown: 0 }, paretoFailures: [], analystMatrix: [],
+    cycleHistogramW2Q: [], cycleHistogramQ2R: [], phaseHeatmap: [], phaseStats: {},
+    trendDailyByOrigin: [], trendDailyByTeam: [], trendDailyByProduct: [], trendDailyByTypology: [], trendDailyByTag: [], trendDailyLlm: []
   };
-  const typologyCounts = {};
-  const tagCounts      = {};
-  const systemicVsHuman = { humanOnly: 0, systemOnly: 0, both: 0, neither: 0, unknown: 0 };
-  let agreeYes = 0, agreeNo = 0, agreeOther = 0;
-  let defectSum = 0, defectCount = 0;
-  const cycleWeekly = {};
-  const cycleMonthly = {};
 
-  rows.forEach(row => {
-    const ts = colIdx.timestamp > -1 ? new Date(row[colIdx.timestamp]) : null;
-    const isValidDate = ts && !isNaN(ts.getTime());
+  var dailyMap = {}, weeklyMap = {}, monthlyMap = {}, dailyDefectMap = {}, cycleWeeklyMap = {}, analystStats = {}, histogramW2Q = {}, histogramQ2R = {}, heatmapData = {};
+  var dailyOriginMap = {}, dailyTeamMap = {}, dailyProductMap = {}, dailyTypologyMap = {}, dailyTagMap = {}, dailyLlmMap = {};
+  var defectSum = 0, workToQcSum = 0, workToQcCount = 0, qcToRcaSum = 0, qcToRcaCount = 0;
 
-    let weekKey  = null;
-    let monthKey = null;
+  rows.forEach(function(row) {
+    var tsRaw = row[colIdx.timestamp], ts = tsRaw instanceof Date ? tsRaw : new Date(tsRaw);
+    if (isNaN(ts.getTime())) return;
+    if (ts > weekAgo) stats.thisWeek++; if (ts > monthAgo) stats.thisMonth++;
 
-    if (isValidDate) {
-      stats.total++;
-      if (ts >= weekAgo)  stats.thisWeek++;
-      if (ts >= monthAgo) stats.thisMonth++;
+    var dayKey = Utilities.formatDate(ts, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    var weekKey = _getWeekKey(ts);
+    var monthKey = Utilities.formatDate(ts, Session.getScriptTimeZone(), 'yyyy-MM');
 
-      const dayKey = _dateKey(ts);
-      dailyTrend[dayKey] = (dailyTrend[dayKey] || 0) + 1;
+    dailyMap[dayKey] = (dailyMap[dayKey] || 0) + 1; weeklyMap[weekKey] = (weeklyMap[weekKey] || 0) + 1; monthlyMap[monthKey] = (monthlyMap[monthKey] || 0) + 1;
 
-      weekKey = _isoWeekKey(ts);
-      weeklyTrend[weekKey] = (weeklyTrend[weekKey] || 0) + 1;
-      if (!cycleWeekly[weekKey]) cycleWeekly[weekKey] = { w2q: [], q2r: [] };
+    if (!dailyDefectMap[dayKey]) dailyDefectMap[dayKey] = { date: dayKey, Critical: 0, Major: 0, Minor: 0, None: 0 };
+    var defRaw = String(row[colIdx.outcomeDefect] || '');
+    if (!defRaw && feedDefects[String(row[colIdx.caseId])]) { defRaw = feedDefects[String(row[colIdx.caseId])]; }
+    defRaw = defRaw === 'Outcome' ? 'Critical' : (defRaw.charAt(0).toUpperCase() + defRaw.slice(1).toLowerCase());
+    if (['Critical', 'Major', 'Minor', 'None'].indexOf(defRaw) === -1) defRaw = 'None';
+    if (dailyDefectMap[dayKey][defRaw] !== undefined) dailyDefectMap[dayKey][defRaw]++; else dailyDefectMap[dayKey]['None']++;
 
-      monthKey = ts.getFullYear() + '-' + String(ts.getMonth() + 1).padStart(2, '0');
-      monthlyTrend[monthKey] = (monthlyTrend[monthKey] || 0) + 1;
-      if (!cycleMonthly[monthKey]) cycleMonthly[monthKey] = { w2q: [], q2r: [] };
-    }
+    // Category daily maps
+    function mapCat(store, key, val) { if (!store[dayKey]) store[dayKey] = {}; store[dayKey][val] = (store[dayKey][val] || 0) + 1; }
+    mapCat(dailyOriginMap, dayKey, row[colIdx.origin]);
+    mapCat(dailyTeamMap, dayKey, row[colIdx.team]);
+    mapCat(dailyProductMap, dayKey, row[colIdx.product]);
+    
+    if (!dailyLlmMap[dayKey]) dailyLlmMap[dayKey] = { date: dayKey, p1: 0, p2: 0, p3: 0, p4: 0, p5: 0, p6: 0 };
+    for (var p=1; p<=6; p++) { if (String(row[colIdx['p'+p+'LlmOutput']]) === 'No') dailyLlmMap[dayKey]['p'+p]++; }
 
-    const bump = (obj, key) => { if (key) obj[key] = (obj[key] || 0) + 1; };
-    bump(stats.byDefect,     _classifyDefect(row, colIdx));
-    bump(stats.byProduct,    colIdx.product    > -1 ? String(row[colIdx.product]    || '').trim() : '');
-    bump(stats.byConductor,  colIdx.conductor  > -1 ? String(row[colIdx.conductor]  || '').trim() : '');
-    bump(stats.byQcReviewer, colIdx.qcReviewer > -1 ? String(row[colIdx.qcReviewer] || '').trim() : '');
-    bump(stats.byAnalyst,    colIdx.analyst    > -1 ? String(row[colIdx.analyst]    || '').trim() : '');
-    bump(stats.byTeam,       colIdx.team       > -1 ? String(row[colIdx.team]       || '').trim() : '');
-    bump(stats.byAgency,     colIdx.agency     > -1 ? String(row[colIdx.agency]     || '').trim() : '');
-    bump(stats.byAuthority,  colIdx.authority  > -1 ? String(row[colIdx.authority]  || '').trim() : '');
-    bump(stats.byCountry,    colIdx.country    > -1 ? String(row[colIdx.country]    || '').trim() : '');
-    bump(stats.byOrigin,     colIdx.origin     > -1 ? String(row[colIdx.origin]     || '').trim() : '');
-    bump(stats.byTaskType,   colIdx.taskType   > -1 ? String(row[colIdx.taskType]   || '').trim() : '');
-    bump(stats.byErrorSource,colIdx.errorSource> -1 ? String(row[colIdx.errorSource]|| '').trim() : '');
+    if (!cycleWeeklyMap[weekKey]) cycleWeeklyMap[weekKey] = { week: weekKey, w2qSum: 0, w2qCnt: 0, q2rSum: 0, q2rCnt: 0 };
+    var w2q = parseFloat(row[colIdx.cycleWorkToQc]), q2r = parseFloat(row[colIdx.cycleQcToRca]);
+    if (!isNaN(w2q)) { cycleWeeklyMap[weekKey].w2qSum += w2q; cycleWeeklyMap[weekKey].w2qCnt++; var bin = Math.min(Math.floor(w2q), 20); histogramW2Q[bin] = (histogramW2Q[bin] || 0) + 1; }
+    if (!isNaN(q2r)) { cycleWeeklyMap[weekKey].q2rSum += q2r; cycleWeeklyMap[weekKey].q2rCnt++; var bin2 = Math.min(Math.floor(q2r), 20); histogramQ2R[bin2] = (histogramQ2R[bin2] || 0) + 1; }
 
-    const qcAgree = colIdx.rcaAgree > -1 ? String(row[colIdx.rcaAgree] || '').trim() : '';
-    bump(stats.byQcAgree, qcAgree);
+    var qcAgree = String(row[colIdx.rcaAgree] || '');
+    if (!stats.agreementTrendDaily[dayKey]) stats.agreementTrendDaily[dayKey] = { yes: 0, no: 0, total: 0 };
+    stats.agreementTrendDaily[dayKey].total++;
+    if (/^yes/i.test(qcAgree)) { stats.agreementBreakdown.yes++; stats.agreementTrendDaily[dayKey].yes++; } else if (/^no/i.test(qcAgree)) { stats.agreementBreakdown.no++; stats.agreementTrendDaily[dayKey].no++; } else stats.agreementBreakdown.other++;
+    var yy = stats.agreementTrendDaily[dayKey].yes, nn = stats.agreementTrendDaily[dayKey].no;
+    stats.agreementTrendDaily[dayKey].rate = +(yy / (yy + nn || 1) * 100).toFixed(1);
 
-    if (/^yes/i.test(qcAgree))         agreeYes++;
-    else if (/^no/i.test(qcAgree))     agreeNo++;
-    else if (qcAgree)                  agreeOther++;
+    if (!heatmapData[monthKey]) heatmapData[monthKey] = { month: monthKey, p2: 0, p3: 0, p4: 0, p5: 0, p6: 0, p7: 0, total: 0 };
+    heatmapData[monthKey].total++;
 
-    const trackPhase = (key, val) => {
-      if (!val) return;
-      if (val === 'Yes') phaseFailure[key].pass++;
-      else if (val === 'No') phaseFailure[key].fail++;
-    };
-    trackPhase('p2Baseline',   _safeStr(row, colIdx.p2Baseline));
-    trackPhase('p2Osint',      _safeStr(row, colIdx.p2Osint));
-    trackPhase('p3Baseline',   _safeStr(row, colIdx.p3Baseline));
-    trackPhase('p3Module',     _safeStr(row, colIdx.p3Module));
-    trackPhase('p4ShortFull',  _safeStr(row, colIdx.p4ShortFull));
-    trackPhase('p4CorrectAll', _safeStr(row, colIdx.p4CorrectAll));
-    trackPhase('p5Decision',   _safeStr(row, colIdx.p5Decision));
+    for (var qi = 0; qi < PHASE_QUESTION_CONFIG.length; qi++) {
+      var cfg = PHASE_QUESTION_CONFIG[qi];
+      if (!stats.phaseStats[cfg.phase]) stats.phaseStats[cfg.phase] = { pass: 0, fail: 0, total: 0, failRate: 0, questions: {} };
+      var phaseData = stats.phaseStats[cfg.phase];
+      if (!phaseData.questions[cfg.key]) phaseData.questions[cfg.key] = { pass: 0, fail: 0, total: 0, failRate: 0, topReason: null, _reasons: {} };
+      var qStat = phaseData.questions[cfg.key]; var qIdx = colIdx[cfg.key], qVal = String(row[qIdx] || '');
 
-    if (colIdx.typology > -1) {
-      String(row[colIdx.typology] || '').split(/[,;|]/).map(s => s.trim()).filter(Boolean)
-        .forEach(t => { typologyCounts[t] = (typologyCounts[t] || 0) + 1; });
-    }
-    if (colIdx.tag > -1) {
-      String(row[colIdx.tag] || '').split(/[,;|]/).map(s => s.trim()).filter(Boolean)
-        .forEach(t => { tagCounts[t] = (tagCounts[t] || 0) + 1; });
-    }
-
-    const errSrc = _safeStr(row, colIdx.errorSource);
-    const sysFail = _safeStr(row, colIdx.rcaSysFail);
-    const isHuman  = /performance/i.test(errSrc);
-    const isSystem = /process|product/i.test(errSrc) || /yes/i.test(sysFail);
-    if (isHuman && isSystem)      systemicVsHuman.both++;
-    else if (isHuman)             systemicVsHuman.humanOnly++;
-    else if (isSystem)            systemicVsHuman.systemOnly++;
-    else if (!errSrc && !sysFail) systemicVsHuman.neither++;
-    else                          systemicVsHuman.unknown++;
-
-    const score = parseFloat(row[colIdx.binaryDefectScore]);
-    if (!isNaN(score)) { defectSum += score; defectCount++; }
-
-    const d = _classifyDefect(row, colIdx);
-    if (d === 'Critical') stats.criticalCount++;
-    if (qcAgree.includes('Appealing'))   stats.flagged.toBeAppealed++;
-    if (_toBool(row[colIdx.flagToTL]))   stats.flagged.flagToTL++;
-    if (_toBool(row[colIdx.failAccepted])) stats.flagged.failAccepted++;
-
-    // ── NEW: Daily defect severity stacking ──
-    if (isValidDate) {
-      const dk = _dateKey(ts);
-      if (!dailyDefects[dk]) dailyDefects[dk] = { Critical:0, Major:0, Minor:0, None:0, Unknown:0 };
-      dailyDefects[dk][d]++;
-    }
-
-    // ── NEW: Failure reason Pareto ──
-    const failTexts = [
-      _safeStr(row, colIdx.p2BaselineFail), _safeStr(row, colIdx.p2OsintFail),
-      _safeStr(row, colIdx.p3BaselineFail), _safeStr(row, colIdx.p3ModuleFail),
-      _safeStr(row, colIdx.p5ActionError), _safeStr(row, colIdx.p5JurisTxt),
-      _safeStr(row, colIdx.p5ExcepTxt), _safeStr(row, colIdx.p5BizTxt),
-      _safeStr(row, colIdx.p6EddTxt), _safeStr(row, colIdx.p6JurisTxt),
-      _safeStr(row, colIdx.p6TemplateTxt), _safeStr(row, colIdx.p6DanteTxt),
-      _safeStr(row, colIdx.p6TagsTxt), _safeStr(row, colIdx.p6AlertsTxt),
-      _safeStr(row, colIdx.p6OffboardTxt), _safeStr(row, colIdx.p6SuspectsTxt),
-      _safeStr(row, colIdx.p6RefundsTxt), _safeStr(row, colIdx.rcaSysFailTxt)
-    ];
-    failTexts.forEach(txt => {
-      if (!txt || txt.toLowerCase() === 'other') return;
-      const key = txt.length > 55 ? txt.slice(0, 53) + '…' : txt;
-      failureReasons[key] = (failureReasons[key] || 0) + 1;
-    });
-
-    // ── NEW: Analyst performance matrix ──
-    const an = colIdx.analyst > -1 ? String(row[colIdx.analyst] || '').trim() : '';
-    if (an) {
-      if (!analystMatrix[an]) analystMatrix[an] = { name: an, count: 0, defectSum: 0, cycleSum: 0, cycleCount: 0 };
-      analystMatrix[an].count++;
-      const sc = parseFloat(row[colIdx.binaryDefectScore]);
-      if (!isNaN(sc)) analystMatrix[an].defectSum += sc;
-      const c1 = parseFloat(row[colIdx.cycleWorkToQc]);
-      const c2 = parseFloat(row[colIdx.cycleQcToRca]);
-      if (!isNaN(c1)) { analystMatrix[an].cycleSum += c1; analystMatrix[an].cycleCount++; }
-      if (!isNaN(c2)) { analystMatrix[an].cycleSum += c2; analystMatrix[an].cycleCount++; }
-    }
-
-    // ── NEW: Phase × Month heatmap ──
-    if (monthKey) {
-      if (!phaseMonthMatrix[monthKey]) phaseMonthMatrix[monthKey] = { p2:0, p2t:0, p3:0, p3t:0, p4:0, p4t:0, p5:0, p5t:0, p6:0, p6t:0, p7:0, p7t:0 };
-      const trackHeat = (ph, val) => {
-        if (!val) return;
-        if (val === 'Yes' || val === 'N/A') { phaseMonthMatrix[monthKey][ph+'t']++; }
-        else if (val === 'No') { phaseMonthMatrix[monthKey][ph+'t']++; phaseMonthMatrix[monthKey][ph]++; }
-      };
-      trackHeat('p2', _safeStr(row, colIdx.p2Baseline));
-      trackHeat('p3', _safeStr(row, colIdx.p3Baseline));
-      trackHeat('p4', _safeStr(row, colIdx.p4ShortFull));
-      trackHeat('p5', _safeStr(row, colIdx.p5Decision));
-      trackHeat('p6', _safeStr(row, colIdx.p6Template));
-      const p7AnyDefect = ['p7Vague','p7BrokenStrings','p7UpstreamFlags','p7ExtEnquiry'].some(k => {
-        const v = _safeStr(row, colIdx[k]);
-        return v.includes('Defect');
-      }) ? 'No' : 'Yes';
-      trackHeat('p7', p7AnyDefect);
-    }
-
-    // Cycle times
-    const w2q = parseFloat(row[colIdx.cycleWorkToQc]);
-    const q2r = parseFloat(row[colIdx.cycleQcToRca]);
-    if (!isNaN(w2q)) {
-      stats.cycleTime.workToQc.push(w2q);
-      if (isValidDate && weekKey) {
-        cycleWeekly[weekKey].w2q.push(w2q);
-        if (monthKey) cycleMonthly[monthKey].w2q.push(w2q);
+      if (qVal === cfg.passValue) { phaseData.pass++; qStat.pass++; phaseData.total++; qStat.total++; }
+      else if (qVal === cfg.failValue) {
+        phaseData.fail++; qStat.fail++; phaseData.total++; qStat.total++;
+        var prefix = 'p' + cfg.phase; if (heatmapData[monthKey][prefix] !== undefined) heatmapData[monthKey][prefix]++;
+        if (cfg.reasonKey) {
+          var reasonIdx = colIdx[cfg.reasonKey], reasonText = 'Other';
+          if (reasonIdx != null && reasonIdx >= 0) reasonText = String(row[reasonIdx] || 'Other');
+          qStat._reasons[reasonText] = (qStat._reasons[reasonText] || 0) + 1;
+          if (!stats.cascading[cfg.key]) stats.cascading[cfg.key] = {};
+          stats.cascading[cfg.key][reasonText] = (stats.cascading[cfg.key][reasonText] || 0) + 1;
+        }
       }
     }
-    if (!isNaN(q2r)) {
-      stats.cycleTime.qcToRca.push(q2r);
-      if (isValidDate && weekKey) {
-        cycleWeekly[weekKey].q2r.push(q2r);
-        if (monthKey) cycleMonthly[monthKey].q2r.push(q2r);
-      }
-    }
+
+    var defectVal = defRaw; stats.byDefect[defectVal] = (stats.byDefect[defectVal] || 0) + 1; if (defectVal === 'Critical') stats.criticalCount++;
+    var score = parseFloat(row[colIdx.binaryDefectScore]); if (!isNaN(score)) defectSum += score;
+
+    if (row[colIdx.flagToTL] === 'TRUE' || row[colIdx.flagToTL] === true) stats.flagged.flagToTL++;
+    if (row[colIdx.toBeAppealed] === 'TRUE' || row[colIdx.toBeAppealed] === true) stats.flagged.toBeAppealed++;
+    if (row[colIdx.failAccepted] === 'TRUE' || row[colIdx.failAccepted] === true) stats.flagged.failAccepted++;
+    if (row[colIdx.wasAppealed] === 'TRUE' || row[colIdx.wasAppealed] === true) stats.flagged.wasAppealed++;
+
+    function count(obj, val) { if (val) obj[val] = (obj[val] || 0) + 1; }
+    count(stats.byConductor, row[colIdx.conductor]); count(stats.byQcReviewer, row[colIdx.qcReviewer]); count(stats.byTeam, row[colIdx.team]); count(stats.byAnalyst, row[colIdx.analyst]); count(stats.byAgency, row[colIdx.agency]);
+    count(stats.byProduct, row[colIdx.product]); count(stats.byCountry, row[colIdx.country]); count(stats.byAuthority, row[colIdx.authority]); count(stats.byOrigin, row[colIdx.origin]); count(stats.byTaskType, row[colIdx.taskType]); count(stats.byErrorSource, row[colIdx.errorSource]);
+    count(stats.topConductors, row[colIdx.conductor]); count(stats.topQcReviewers, row[colIdx.qcReviewer]);
+
+    var typs = String(row[colIdx.typologies] || '').split(/,|\n/);
+    for (var t = 0; t < typs.length; t++) { if (typs[t].trim()) { count(stats.topTypologies, typs[t].trim()); mapCat(dailyTypologyMap, dayKey, typs[t].trim()); } }
+    var tags = String(row[colIdx.riskTags] || '').split(/,|\n/);
+    for (var t2 = 0; t2 < tags.length; t2++) { if (tags[t2].trim()) { count(stats.topRiskTags, tags[t2].trim()); mapCat(dailyTagMap, dayKey, tags[t2].trim()); } }
+
+    var an = row[colIdx.analyst]; if (an) { if (!analystStats[an]) analystStats[an] = { count: 0, scoreSum: 0, cycleSum: 0, cycleCnt: 0 }; analystStats[an].count++; if (!isNaN(score)) analystStats[an].scoreSum += score; if (!isNaN(w2q)) { analystStats[an].cycleSum += w2q; analystStats[an].cycleCnt++; } }
+
+    var errSrc = String(row[colIdx.errorSource] || '').toLowerCase(); var sysFail = String(row[colIdx.systemProcessFail] || '').toLowerCase();
+    if (errSrc === 'performance' && sysFail === 'no') stats.systemicVsHuman.humanOnly++;
+    else if (errSrc === 'process/product' && sysFail === 'yes') stats.systemicVsHuman.systemOnly++;
+    else if (errSrc === 'both' || (errSrc === 'performance' && sysFail === 'yes') || (errSrc === 'process/product' && sysFail === 'no')) stats.systemicVsHuman.both++;
+    else if (errSrc === 'neither') stats.systemicVsHuman.neither++;
+    else stats.systemicVsHuman.unknown++;
+
+    if (!isNaN(w2q)) { workToQcSum += w2q; workToQcCount++; } if (!isNaN(q2r)) { qcToRcaSum += q2r; qcToRcaCount++; }
   });
 
-  // ── NEW: Assemble extended analytics ──
-  stats.trendDailyByDefect = Object.entries(dailyDefects)
-    .sort((a,b) => a[0].localeCompare(b[0]))
-    .map(([date, o]) => ({ date, Critical:o.Critical||0, Major:o.Major||0, Minor:o.Minor||0, None:o.None||0, Unknown:o.Unknown||0 }));
+  Object.keys(dailyMap).sort().forEach(function(k) { stats.trendDaily.push({ date: k, count: dailyMap[k] }); });
+  Object.keys(weeklyMap).sort().forEach(function(k) { stats.trendWeekly.push({ week: k, count: weeklyMap[k] }); });
+  Object.keys(monthlyMap).sort().forEach(function(k) { stats.trendMonthly.push({ month: k, count: monthlyMap[k] }); });
+  Object.keys(dailyDefectMap).sort().forEach(function(k) { stats.trendDailyByDefect.push(dailyDefectMap[k]); });
+  
+  function formatCatTrend(map) { return Object.keys(map).sort().map(function(k) { var d = map[k]; Object.keys(d).forEach(function(sk) { d[sk] = d[sk]; }); return Object.assign({ date: k }, d); }); }
+  stats.trendDailyByOrigin = formatCatTrend(dailyOriginMap); stats.trendDailyByTeam = formatCatTrend(dailyTeamMap); stats.trendDailyByProduct = formatCatTrend(dailyProductMap); stats.trendDailyByTypology = formatCatTrend(dailyTypologyMap); stats.trendDailyByTag = formatCatTrend(dailyTagMap);
+  Object.keys(dailyLlmMap).sort().forEach(function(k) { stats.trendDailyLlm.push(dailyLlmMap[k]); });
 
-  stats.paretoFailures = Object.entries(failureReasons).sort((a,b) => b[1]-a[1]).slice(0, 15);
+  Object.keys(cycleWeeklyMap).sort().forEach(function(k) { var v = cycleWeeklyMap[k]; stats.cycleTimeTrendWeekly.push({ week: k, avgWorkToQc: v.w2qCnt > 0 ? +(v.w2qSum / v.w2qCnt).toFixed(1) : 0, avgQcToRca: v.q2rCnt > 0 ? +(v.q2rSum / v.q2rCnt).toFixed(1) : 0 }); });
+  Object.keys(histogramW2Q).sort(function(a, b) { return a - b; }).forEach(function(k) { stats.cycleHistogramW2Q.push({ label: k === '20' ? '20+' : k, count: histogramW2Q[k] }); });
+  Object.keys(histogramQ2R).sort(function(a, b) { return a - b; }).forEach(function(k) { stats.cycleHistogramQ2R.push({ label: k === '20' ? '20+' : k, count: histogramQ2R[k] }); });
+  Object.keys(analystStats).forEach(function(an) { var a = analystStats[an]; stats.analystMatrix.push({ name: an, count: a.count, avgScore: +(a.scoreSum / a.count).toFixed(2), avgCycle: a.cycleCnt > 0 ? +(a.cycleSum / a.cycleCnt).toFixed(1) : 0 }); });
+  Object.keys(heatmapData).sort().forEach(function(m) { var d = heatmapData[m]; stats.phaseHeatmap.push({ month: m, p2: d.total ? Math.round((d.p2 / d.total) * 100) : 0, p3: d.total ? Math.round((d.p3 / d.total) * 100) : 0, p4: d.total ? Math.round((d.p4 / d.total) * 100) : 0, p5: d.total ? Math.round((d.p5 / d.total) * 100) : 0, p6: d.total ? Math.round((d.p6 / d.total) * 100) : 0, p7: d.total ? Math.round((d.p7 / d.total) * 100) : 0 }); });
 
-  stats.analystMatrix = Object.values(analystMatrix)
-    .filter(a => a.count >= 2)
-    .map(a => ({
-      name: a.name,
-      count: a.count,
-      avgScore: +(a.defectSum / a.count).toFixed(2),
-      avgCycle: a.cycleCount ? +(a.cycleSum / a.cycleCount).toFixed(1) : 0
-    }));
-
-  stats.phaseHeatmap = Object.entries(phaseMonthMatrix)
-    .sort((a,b) => a[0].localeCompare(b[0]))
-    .slice(-12)
-    .map(([month, o]) => {
-      const pct = (k) => o[k+'t'] ? +(o[k]/o[k+'t']*100).toFixed(1) : 0;
-      return { month, p2: pct('p2'), p3: pct('p3'), p4: pct('p4'), p5: pct('p5'), p6: pct('p6'), p7: pct('p7') };
-    });
-
-  stats.cycleHistogramW2Q = buildHistogram(stats.cycleTime.workToQc, 7);
-  stats.cycleHistogramQ2R = buildHistogram(stats.cycleTime.qcToRca, 7);
-
-  // ── Derived metrics ──
-  if (stats.cycleTime.workToQc.length) {
-    stats.cycleTime.avgWorkToQc = stats.cycleTime.workToQc.reduce((a, b) => a + b, 0) / stats.cycleTime.workToQc.length;
-  }
-  if (stats.cycleTime.qcToRca.length) {
-    stats.cycleTime.avgQcToRca = stats.cycleTime.qcToRca.reduce((a, b) => a + b, 0) / stats.cycleTime.qcToRca.length;
-  }
-
-  Object.keys(phaseFailure).forEach(k => {
-    const ph = phaseFailure[k];
-    ph.total = ph.pass + ph.fail;
-    ph.failRate = ph.total > 0 ? +(ph.fail / ph.total * 100).toFixed(1) : 0;
-  });
-
-  const totalAgreed = agreeYes + agreeNo;
-  stats.agreementRate   = totalAgreed > 0 ? +(agreeYes / totalAgreed * 100).toFixed(1) : 0;
-  stats.agreementBreakdown = { yes: agreeYes, no: agreeNo, other: agreeOther };
-  stats.avgDefectScore  = defectCount > 0 ? +(defectSum / defectCount).toFixed(2) : 0;
-  stats.phaseFailure    = phaseFailure;
-  stats.topTypologies   = _topN(typologyCounts, 10);
-  stats.topRiskTags     = _topN(tagCounts, 10);
-  stats.systemicVsHuman = systemicVsHuman;
+  var failureReasons = {};
+  Object.keys(stats.cascading).forEach(function(pkey) { Object.keys(stats.cascading[pkey]).forEach(function(reason) { 
+    var r = reason.toLowerCase(); if (r !== 'other' && r !== 'no' && r !== 'yes') { failureReasons[reason] = (failureReasons[reason] || 0) + stats.cascading[pkey][reason]; } 
+  }); });
+  var paretoArr = []; Object.keys(failureReasons).forEach(function(k) { paretoArr.push([k, failureReasons[k]]); });
+  paretoArr.sort(function(a, b) { return b[1] - a[1]; }); stats.paretoFailures = paretoArr;
 
   if (stats.total > 0) {
-    stats.criticalRate = +((stats.criticalCount / stats.total) * 100).toFixed(1);
-    stats.flagRate     = +((stats.flagged.flagToTL / stats.total) * 100).toFixed(1);
-    stats.appealRate   = +((stats.flagged.toBeAppealed / stats.total) * 100).toFixed(1);
-    if (stats.thisMonth > 0) stats.avgPerDay = +(stats.thisMonth / 30).toFixed(1);
+    var agYes = stats.agreementBreakdown.yes, agNo = stats.agreementBreakdown.no;
+    stats.agreementRate = +((agYes / (agYes + agNo || 1)) * 100).toFixed(1); stats.avgDefectScore = +(defectSum / stats.total).toFixed(2);
+    stats.criticalRate = +((stats.criticalCount / stats.total) * 100).toFixed(1); stats.flagRate = +((stats.flagged.flagToTL / stats.total) * 100).toFixed(1); stats.appealRate = +((stats.flagged.toBeAppealed / stats.total) * 100).toFixed(1);
+    stats.avgPerDay = +(stats.total / (Object.keys(dailyMap).length || 1)).toFixed(1);
   }
+  if (workToQcCount > 0) stats.cycleTime.avgWorkToQc = +(workToQcSum / workToQcCount).toFixed(1); if (qcToRcaCount > 0) stats.cycleTime.avgQcToRca = +(qcToRcaSum / qcToRcaCount).toFixed(1);
 
-  stats.trendDaily = Object.entries(dailyTrend).sort((a, b) => a[0].localeCompare(b[0])).map(([date, count]) => ({ date, count }));
-  stats.trendWeekly = Object.entries(weeklyTrend).sort((a, b) => a[0].localeCompare(b[0])).slice(-26).map(([week, count]) => ({ week, count }));
-  stats.trendMonthly = Object.entries(monthlyTrend).sort((a, b) => a[0].localeCompare(b[0])).slice(-12).map(([month, count]) => ({ month, count }));
-
-  stats.cycleTimeTrendWeekly = Object.entries(cycleWeekly).sort((a, b) => a[0].localeCompare(b[0])).slice(-26).map(([week, v]) => ({
-    week,
-    avgWorkToQc: v.w2q.length ? +(v.w2q.reduce((a, b) => a + b, 0) / v.w2q.length).toFixed(2) : null,
-    avgQcToRca:  v.q2r.length ? +(v.q2r.reduce((a, b) => a + b, 0) / v.q2r.length).toFixed(2) : null
-  }));
-  stats.cycleTimeTrendMonthly = Object.entries(cycleMonthly).sort((a, b) => a[0].localeCompare(b[0])).slice(-12).map(([month, v]) => ({
-    month,
-    avgWorkToQc: v.w2q.length ? +(v.w2q.reduce((a, b) => a + b, 0) / v.w2q.length).toFixed(2) : null,
-    avgQcToRca:  v.q2r.length ? +(v.q2r.reduce((a, b) => a + b, 0) / v.q2r.length).toFixed(2) : null
-  }));
-
-  stats.topConductors  = _topN(stats.byConductor, 10);
-  stats.topQcReviewers = _topN(stats.byQcReviewer, 10);
-  stats.topAnalysts    = _topN(stats.byAnalyst, 10);
-  stats.topTeams       = _topN(stats.byTeam, 10);
-  stats.topAgencies    = _topN(stats.byAgency, 10);
-  stats.topAuthorities = _topN(stats.byAuthority, 10);
-  stats.topCountries   = _topN(stats.byCountry, 10);
+  Object.keys(stats.phaseStats).forEach(function(phaseNum) {
+    var ph = stats.phaseStats[phaseNum]; ph.failRate = ph.total > 0 ? +(ph.fail / ph.total * 100).toFixed(1) : 0;
+    Object.keys(ph.questions).forEach(function(qKey) {
+      var qs = ph.questions[qKey]; qs.failRate = qs.total > 0 ? +(qs.fail / qs.total * 100).toFixed(1) : 0;
+      if (qs._reasons && Object.keys(qs._reasons).length) { var sorted = []; Object.keys(qs._reasons).forEach(function(rk) { sorted.push([rk, qs._reasons[rk]]); }); sorted.sort(function(a, b) { return b[1] - a[1]; }); qs.topReason = { reason: sorted[0][0], count: sorted[0][1] }; }
+      delete qs._reasons;
+    });
+  });
 
   return stats;
 }
 
-function _safeStr(row, idx) { return idx > -1 ? String(row[idx] || '').trim() : ''; }
+function _getWeekKey(d) { var date = new Date(d.getTime()); date.setHours(0, 0, 0, 0); date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7); var week1 = new Date(date.getFullYear(), 0, 4); var weekNum = 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7); return date.getFullYear() + '-W' + (weekNum < 10 ? '0' + weekNum : weekNum); }
 
-function _emptyRcaAnalytics() {
-  return {
-    total: 0, thisWeek: 0, thisMonth: 0,
-    criticalCount: 0, criticalRate: 0, flagRate: 0, appealRate: 0,
-    agreementRate: 0, avgDefectScore: 0, avgPerDay: 0,
-    agreementBreakdown: { yes: 0, no: 0, other: 0 },
-
-    byDefect: {}, byProduct: {}, byTeam: {}, byAgency: {}, byAuthority: {}, byCountry: {},
-    byOrigin: {}, byTaskType: {}, byAnalyst: {}, byConductor: {}, byQcReviewer: {},
-    byQcAgree: {}, byErrorSource: {},
-    topConductors: {}, topQcReviewers: {}, topAnalysts: {}, topTeams: {},
-    topAgencies: {}, topAuthorities: {}, topCountries: {},
-
-    flagged: { flagToTL: 0, toBeAppealed: 0, failAccepted: 0 },
-    cycleTime: { workToQc: [], qcToRca: [], avgWorkToQc: 0, avgQcToRca: 0 },
-
-    phaseFailure: {
-      p2Baseline:   { pass: 0, fail: 0, total: 0, failRate: 0 },
-      p2Osint:      { pass: 0, fail: 0, total: 0, failRate: 0 },
-      p3Baseline:   { pass: 0, fail: 0, total: 0, failRate: 0 },
-      p3Module:     { pass: 0, fail: 0, total: 0, failRate: 0 },
-      p4ShortFull:  { pass: 0, fail: 0, total: 0, failRate: 0 },
-      p4CorrectAll: { pass: 0, fail: 0, total: 0, failRate: 0 },
-      p5Decision:   { pass: 0, fail: 0, total: 0, failRate: 0 }
-    },
-    topTypologies: {}, topRiskTags: {},
-    systemicVsHuman: { humanOnly: 0, systemOnly: 0, both: 0, neither: 0, unknown: 0 },
-
-    trendDaily: [], trendWeekly: [], trendMonthly: [],
-    cycleTimeTrendWeekly: [], cycleTimeTrendMonthly: [],
-
-    trendDailyByDefect: [],
-    paretoFailures: [],
-    analystMatrix: [],
-    phaseHeatmap: [],
-    cycleHistogramW2Q: [],
-    cycleHistogramQ2R: []
-  };
+// ============================================================
+// DETAIL + TABLE + CSV
+// ============================================================
+function getRcaDetail(caseId) {
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME_RCA); if (!sheet) return { success: false };
+    var data = sheet.getDataRange().getValues(); var headers = data[0]; var idIdx = -1;
+    for (var i = 0; i < headers.length; i++) { if (String(headers[i] || '').toLowerCase().trim() === 'case id') { idIdx = i; break; } }
+    if (idIdx === -1) return { success: false, error: 'Case ID column not found' };
+    var row = null; for (var j = 1; j < data.length; j++) { if (String(data[j][idIdx]) === String(caseId)) { row = data[j]; break; } }
+    if (!row) return { success: false }; var res = {}; for (var k = 0; k < headers.length; k++) { var val = row[k]; if (val instanceof Date) val = _fmtDate(val); res[headers[k]] = val; } return { success: true, data: res };
+  } catch (e) { return { success: false, error: e.toString() }; }
 }
 
-function _fmtDate(v) {
-  if (!v) return '';
-  if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd');
-  return String(v).slice(0, 10);
-}
-
-function _dateKey(d) {
-  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-}
-
-function _isoWeekKey(d) {
-  const t = new Date(d.valueOf());
-  const dayNr = (d.getDay() + 6) % 7;
-  t.setDate(t.getDate() - dayNr + 3);
-  const firstThursday = t.valueOf();
-  t.setMonth(0, 1);
-  if (t.getDay() !== 4) t.setMonth(0, 1 + ((4 - t.getDay()) + 7) % 7);
-  return d.getFullYear() + '-W' + String(1 + Math.ceil((firstThursday - t) / 604800000)).padStart(2, '0');
-}
-
-function diagnoseMigration() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName('RCA Results');
-  
-  console.log('=== DIAGNOSTIC ===');
-  console.log('Sheet exists:', !!sheet);
-  if (!sheet) return;
-  
-  const lastRow = sheet.getLastRow();
-  const lastCol = sheet.getLastColumn();
-  console.log('Sheet dimensions:', lastRow, 'rows x', lastCol, 'cols');
-  
-  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
-  console.log('Current headers (first 10):', headers.slice(0, 10).join(' | '));
-  console.log('Current headers (last 5):', headers.slice(-5).join(' | '));
-  
-  console.log('---');
-  console.log('OLD_VERSIONS configured:');
-  Object.entries(OLD_VERSIONS).forEach(([k, v]) => {
-    console.log(`  ${k}: ${v.length} headers (first: "${v[0]}", last: "${v[v.length-1]}")`);
-  });
-  
-  console.log('---');
-  console.log('HEADER_ALIASES configured:', Object.keys(HEADER_ALIASES).length, 'aliases');
-  
-  console.log('---');
-  console.log('Normalization tests:');
-  ['Task Type Match', 'P1 Scope Correct', 'RCA Reviewer Email', 'Cycle Work-to-QC (days)']
-    .forEach(h => console.log(`  "${h}" -> "${_normalize(h)}"`));
-  
-  console.log('---');
-  console.log('Alias resolution tests:');
-  ['task type match', 'p1 scope correct', 'rca reviewer email', 'qc name']
-    .forEach(n => console.log(`  "${n}" -> "${HEADER_ALIASES[n] || '(no alias)'}"`));
-  
-  return 'Done - check logs';
-}
-
-function verifyMigrationSetup() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName('RCA Results');
-  if (!sheet) { console.log('❌ No RCA Results sheet'); return; }
-
-  const liveHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const liveNorm    = liveHeaders.map(_normalize);
-  const schemaNorm  = CURRENT_SCHEMA.map(_normalize);
-
-  let problems = 0;
-
-  if (liveHeaders.length !== CURRENT_SCHEMA.length) {
-    console.log(`❌ Column count mismatch — sheet has ${liveHeaders.length}, CURRENT_SCHEMA has ${CURRENT_SCHEMA.length}`);
-    problems++;
-  } else {
-    console.log(`✓ Column count: ${CURRENT_SCHEMA.length}`);
-  }
-
-  liveNorm.forEach((norm, i) => {
-    if (!schemaNorm.includes(norm)) {
-      console.log(`❌ Live header [${i+1}] "${liveHeaders[i]}" (→ "${norm}") not in CURRENT_SCHEMA`);
-      problems++;
-    }
-  });
-
-  schemaNorm.forEach((norm, i) => {
-    if (!liveNorm.includes(norm)) {
-      console.log(`❌ CURRENT_SCHEMA [${i+1}] "${CURRENT_SCHEMA[i]}" (→ "${norm}") not in live sheet`);
-      problems++;
-    }
-  });
-
-  Object.entries(HEADER_ALIASES).forEach(([oldN, newN]) => {
-    if (liveNorm.indexOf(newN) === -1) {
-      console.log(`❌ Alias "${oldN}" → "${newN}" — target not found in live sheet`);
-      problems++;
-    }
-  });
-
-  const v31 = OLD_VERSIONS['v_31may'];
-  if (Array.isArray(v31)) {
-    const v31Norm = v31.map(_normalize);
-    const mapping = _buildMapping(v31Norm, liveNorm);
-    const unmapped = v31
-      .map((h, i) => ({ name: h, norm: v31Norm[i], idx: i }))
-      .filter(({ norm, idx }) => mapping.every(src => src !== idx) && norm);
-    if (unmapped.length === 0) {
-      console.log(`✓ All ${v31.length} v_31may columns map to current schema`);
-    } else {
-      console.log(`⚠️ ${unmapped.length} v_31may columns would be unmapped:`);
-      unmapped.forEach(u => console.log(`     "${u.name}" (→ "${u.norm}")`));
-      problems += unmapped.length;
-    }
-  }
-
-  console.log('---');
-  if (problems === 0) {
-    console.log('✅ Migration setup is VALID — safe to run migrateRcaResults()');
-  } else {
-    console.log(`❌ Found ${problems} issue(s) — fix before migrating`);
-  }
-  return problems === 0;
+function getRcaResultsTable(filters, page, pageSize) {
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME_RCA); if (!sheet) return { success: false, error: 'Sheet not found' };
+    var data = sheet.getDataRange().getValues(); var hLower = data[0].map(function(h) { return String(h || '').toLowerCase(); }); var colIdx = _buildRcaColumnIndex(hLower);
+    var filtered = data.slice(1).filter(function(row) { return _matchesRcaFilters(row, colIdx, filters || {}); });
+    var tsIdx = colIdx.timestamp; filtered.sort(function(a, b) { var ta = new Date(a[tsIdx]).getTime(); var tb = new Date(b[tsIdx]).getTime(); return (isNaN(tb) ? 0 : tb) - (isNaN(ta) ? 0 : ta); });
+    page = page || 1; pageSize = pageSize || 25; var slice = filtered.slice((page - 1) * pageSize, page * pageSize);
+    var resultRows = slice.map(function(r) { var obj = {}; for (var i = 0; i < data[0].length; i++) { var val = r[i]; if (val instanceof Date) val = _fmtDate(val); obj[data[0][i]] = val; } var defectRaw = String(obj['Outcome Defect'] || ''); return { timestamp: obj['Timestamp'], caseId: obj['Case ID'], defect: defectRaw || 'Unknown', product: obj['Product'], analyst: obj['Analyst'], qcReviewer: obj['QC Reviewer'], errorSource: obj['Error Source'], binaryDefectScore: obj['Binary Defect Score'], flagToTL: obj['Flag to TL'] === 'TRUE' || obj['Flag to TL'] === true, toBeAppealed: obj['To be Appealed'] === 'TRUE' || obj['To be Appealed'] === true, failAccepted: obj['Fail Accepted'] === 'TRUE' || obj['Fail Accepted'] === true, boLink: obj['BO Link'], qcLink: obj['QC Link'], cycleWorkToQc: obj['Cycle Work-to-QC (days)'], cycleQcToRca: obj['Cycle QC-to-RCA (days)'], comments: obj['Reviewer Comments'], sysFailTxt: obj['System Process Details'], suggestedUpdate: obj['Suggested Update'] }; });
+    return { success: true, rows: resultRows, total: filtered.length, page: page, pageSize: pageSize };
+  } catch (e) { return { success: false, error: e.toString() }; }
 }
 
 function exportRcaToCsv(filters) {
-  const t0 = Date.now();
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName('RCA Results');
-    if (!sheet) return _meta({ success: false, error: 'RCA Results sheet not found' }, t0);
-
-    const data = sheet.getDataRange().getValues();
-    if (data.length < 2) return _meta({ success: true, csv: '', rowCount: 0 }, t0);
-
-    const headers = data[0].map(h => (h || '').toString());
-    const colIdx  = _buildRcaColumnIndex(headers);
-
-    const filtered = data.slice(1).filter(row => _matchesRcaFilters(row, colIdx, filters || {}));
-
-    const escapeCsv = (v) => {
-      const s = String(v == null ? '' : v);
-      return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-    };
-
-    const rows = [headers.map(escapeCsv).join(',')];
-    filtered.forEach(row => rows.push(row.map(escapeCsv).join(',')));
-
-    return _meta({ success: true, csv: rows.join('\n'), rowCount: filtered.length }, t0);
-  } catch (e) {
-    return _meta({ success: false, error: e.message }, t0);
-  }
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME_RCA); if (!sheet) return { success: false, error: 'Sheet not found' };
+    var data = sheet.getDataRange().getValues(); var hLower = data[0].map(function(h) { return String(h || '').toLowerCase(); }); var colIdx = _buildRcaColumnIndex(hLower);
+    var rows = data.slice(1).filter(function(row) { return _matchesRcaFilters(row, colIdx, filters || {}); });
+    function esc(v) { var s; if (v instanceof Date) s = isNaN(v.getTime()) ? '' : Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss'); else s = String(v == null ? '' : v); s = s.replace(/\r?\n/g, '\\n'); return '"' + s.replace(/"/g, '""') + '"'; }
+    var headerRow = data[0].map(esc).join(','); var bodyRows = rows.map(function(r) { return r.map(esc).join(','); });
+    return { success: true, csv: [headerRow].concat(bodyRows).join('\r\n'), rowCount: rows.length };
+  } catch (e) { return { success: false, error: e.toString() }; }
 }
 
-function include(filename) {
-  return HtmlService.createHtmlOutputFromFile(filename).getContent();
+// ============================================================
+// ACTION ITEMS
+// ============================================================
+function logActionItem(item) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet(); var sheet = ss.getSheetByName('Action Items');
+    if (!sheet) { sheet = ss.insertSheet('Action Items'); sheet.appendRow(['Timestamp', 'Title', 'Description', 'Category', 'Priority', 'Owner', 'Jira Type', 'Source', 'Status', 'Context']); sheet.getRange(1, 1, 1, 10).setFontWeight('bold').setBackground('#EEEAFF').setFrozenRows(1); }
+    sheet.appendRow([new Date(), item.title || '', item.description || '', item.category || '', item.priority || 'Medium', item.proposedOwner || '', item.jiraType || 'Subtask', item.source || '', item.status || 'draft', JSON.stringify(item.context || {})]);
+    return { success: true };
+  } catch (e) { return { success: false, error: e.toString() }; }
 }
 
-function debugLine760() {
-  const source = Code.gs.getSource();
-  const lines = source.split('\n');
-  console.log('Total lines in Code.gs:', lines.length);
-  console.log('--- Lines 755-770 ---');
-  for (let i = 754; i < Math.min(770, lines.length); i++) {
-    console.log(`${i + 1}: ${JSON.stringify(lines[i])}`);
-  }
-  return 'See logs';
+function exportActionsToJiraCsv(payload) {
+  try {
+    var items = (payload && payload.items) || []; if (!items.length) return { success: false, error: 'No items to export' };
+    var props = PropertiesService.getScriptProperties(); var parentKey = props.getProperty('JIRA_PARENT_KEY') || '';
+    var customHeaders = props.getProperty('JIRA_CSV_HEADERS'); var headers = customHeaders ? customHeaders.split(',').map(function(h) { return h.trim(); }) : ['Summary', 'Issue Type', 'Priority', 'Labels', 'Description', 'Components', 'Parent'];
+    function esc(v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; } var rows = [headers.join(',')];
+    items.forEach(function(i) {
+      var labels = 'rca-wizard,' + String(i.category || '').toLowerCase().replace(/\s+/g, '-') + ',' + String(i.proposedOwner || '').toLowerCase().replace(/\s+/g, '-');
+      var description = [i.description || '', '', '---', 'Source: ' + (i.source || 'manual'), 'Category: ' + (i.category || 'Process'), 'Priority: ' + (i.priority || 'Medium'), 'Proposed Owner: ' + (i.proposedOwner || 'Team Lead'), 'Flagged: ' + new Date().toISOString(), '', 'Filter context:', JSON.stringify((i.context && i.context.filters) || {}, null, 2)].join('\n');
+      var row = { 'Summary': i.title, 'Issue Type': i.jiraType || 'Subtask', 'Priority': i.priority || 'Medium', 'Labels': labels, 'Description': description, 'Components': i.category || 'Process', 'Parent': parentKey };
+      var out = []; for (var h = 0; h < headers.length; h++) { out.push(esc(row[headers[h]])); } rows.push(out.join(','));
+    });
+    return { success: true, csv: rows.join('\r\n'), count: items.length };
+  } catch (e) { return { success: false, error: e.toString() }; }
 }
 
-function buildHistogram(values, binSize) {
-  const map = new Map();
-  values.forEach(v => {
-    if (isNaN(v)) return;
-    const start = Math.floor(v / binSize) * binSize;
-    const label = start + '-' + (start + binSize);
-    map.set(label, (map.get(label) || 0) + 1);
-  });
-  return Array.from(map.entries())
-    .sort((a, b) => parseInt(a[0]) - parseInt(b[0]))
-    .map(([label, count]) => ({ label, count }));
-}
-
-// ═════════════════════════════════════════════════════════════
-// ACTION ITEMS → JIRA ROADMAP
-// ═════════════════════════════════════════════════════════════
-
-function logActionItem(data) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName('RCA Action Items');
-  if (!sheet) {
-    sheet = ss.insertSheet('RCA Action Items');
-    sheet.appendRow(['Timestamp','Reporter Email','Summary','Description','Category','Priority','Proposed Owner','RCA Context','Status','Jira Key']);
-    sheet.getRange(1,1,1,10).setFontWeight('bold').setBackground('#5B47E0').setFontColor('#FFFFFF');
-  }
-  const ctx = JSON.stringify(data.context || {});
-  sheet.appendRow([
-    new Date(),
-    Session.getActiveUser().getEmail(),
-    data.title,
-    data.description,
-    data.category,
-    data.priority,
-    data.proposedOwner,
-    ctx,
-    'Open',
-    ''
-  ]);
-  return { success: true };
-}
-
-function exportActionsToJiraCsv() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName('RCA Action Items');
-  if (!sheet) return { success: true, csv: '', count: 0 };
-  const data = sheet.getDataRange().getValues();
-  const rows = [['Summary','Description','Priority','Labels','Issue Type']];
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][8] !== 'Open') continue;
-    const ctx = data[i][7] || '{}';
-    rows.push([
-      data[i][2],
-      data[i][3] + '\n\nRCA Context:\n' + ctx,
-      data[i][5],
-      'RCA-Action;' + data[i][4],
-      'Improvement'
-    ]);
-  }
-  const esc = (v) => { const s=String(v); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; };
-  const csv = rows.map(r => r.map(esc).join(',')).join('\n');
-  return { success: true, csv, count: rows.length - 1 };
-}
+function selfTest() { return { schemaLength: CURRENT_SCHEMA.length, phaseConfigLength: PHASE_QUESTION_CONFIG.length, ok: CURRENT_SCHEMA.length === 116 && PHASE_QUESTION_CONFIG.length === 41 }; }
