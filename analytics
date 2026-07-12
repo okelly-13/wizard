@@ -1,463 +1,153 @@
 <style>
-  /* ============================================================
-     ANALYTICS-ONLY STYLES
-     ============================================================ */
-  :root, [data-theme="light"] {
-    --chart-line: #5B47E0;
-    --chart-fill: rgba(91, 71, 224, 0.12);
-    --chart-grid: rgba(0, 0, 0, 0.05);
-    --chart-tick: #6B7588;
-    --chart-red: #F5365C;
-    --chart-green: #14C18C;
-    --chart-orange: #FFA800;
-    --chart-blue: #2563EB;
-    --chart-gray: #9CA3AF;
-  }
-  [data-theme="dark"] {
-    --chart-line: #8B7FFF;
-    --chart-fill: rgba(139, 127, 255, 0.18);
-    --chart-grid: rgba(255, 255, 255, 0.06);
-    --chart-tick: #A8B0C5;
-    --chart-red: #FF5470;
-    --chart-green: #14C18C;
-    --chart-orange: #FFA800;
-    --chart-blue: #5B8DEF;
-    --chart-gray: #6B7588;
-  }
-
-  .analytics-empty { padding: 30px; text-align: center; color: var(--text-muted); font-size: 12px; }
-
-  .chart-grid {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
-    padding: 0 20px 20px;
-  }
-  @media (max-width: 900px) { .chart-grid { grid-template-columns: 1fr; } }
-
-  .chart-card {
-    background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: var(--radius-md); padding: 16px 20px;
-    display: flex; flex-direction: column;
-  }
-  .chart-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-  .chart-card-title { font-size: 13px; font-weight: 700; color: var(--text-primary); }
-  .chart-card-sub   { font-size: 11px; color: var(--text-secondary); }
-  .chart-canvas-wrap { position: relative; flex: 1; min-height: 220px; }
-
-  .phase-bar-row {
-    display: grid; grid-template-columns: 130px 1fr 70px;
-    align-items: center; gap: 10px; margin-bottom: 8px;
-    font-size: 12px;
-  }
-  .phase-bar-track {
-    height: 22px; background: var(--bg-app);
-    border-radius: 6px; overflow: hidden; position: relative;
-    border: 1px solid var(--border);
-  }
-  .phase-bar-pass {
-    position: absolute; left: 0; top: 0; bottom: 0;
-    background: var(--chart-green); transition: width 400ms var(--ease);
-  }
-  .phase-bar-fail {
-    position: absolute; right: 0; top: 0; bottom: 0;
-    background: var(--chart-red); transition: width 400ms var(--ease);
-  }
-  .phase-bar-label { color: var(--text-primary); font-weight: 600; }
-  .phase-bar-rate  { font-weight: 700; font-size: 12px; text-align: right; }
-  .phase-bar-rate.fail-high { color: var(--chart-red); }
-  .phase-bar-rate.fail-mid  { color: var(--chart-orange); }
-  .phase-bar-rate.fail-low  { color: var(--chart-green); }
-
-  .donut-legend { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
-  .donut-legend-row {
-    display: flex; align-items: center; gap: 8px;
-    font-size: 12px;
-  }
-  .donut-legend-dot { width: 10px; height: 10px; border-radius: 3px; }
-  .donut-legend-name { flex: 1; color: var(--text-primary); }
-  .donut-legend-val  { font-weight: 700; color: var(--text-secondary); }
-
-  .table-cell-trunc {
-    max-width: 280px; overflow: hidden; text-overflow: ellipsis;
-    white-space: nowrap; display: inline-block; vertical-align: middle;
-  }
-
-  .analytics-search {
-    flex: 1; min-width: 180px; padding: 7px 12px;
-    border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
-    background: var(--bg-card); color: var(--text-primary);
-    font-size: 12px; font-family: inherit;
-  }
-  .analytics-search:focus {
-    outline: none; border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(91,71,224,0.15);
-  }
-
-  .date-target-chip {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 4px 8px; border-radius: var(--radius-full);
-    background: var(--bg-card); border: 1px solid var(--border-strong);
-    font-size: 11px; color: var(--text-secondary);
-  }
-  .date-target-chip select {
-    border: none; background: transparent;
-    font-size: 11px; font-weight: 600; color: var(--accent);
-    cursor: pointer; outline: none;
-  }
-
-  .text-link {
-    color: var(--accent); text-decoration: none; font-weight: 600;
-    display: inline-flex; align-items: center; gap: 3px;
-  }
-  .text-link:hover { text-decoration: underline; }
-  .text-link.disabled { color: var(--text-muted); cursor: not-allowed; }
-
-  /* ✅ FIX — Missing styles for charts referenced by extra render fns */
-  .heatmap-grid {
-    display: grid; gap: 3px; font-size: 11px;
-  }
-  .heatmap-cell {
-    text-align: center; padding: 7px 2px;
-    border-radius: 4px; cursor: pointer; font-weight: 600;
-  }
+  .analytics-view { animation: fadeIn 250ms var(--ease); }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; } }
+  :root, [data-theme="light"] { --chart-line: #5B47E0; --chart-fill: rgba(91, 71, 224, 0.12); --chart-grid: rgba(0, 0, 0, 0.05); --chart-tick: #6B7588; --chart-red: #F5365C; --chart-green: #14C18C; --chart-orange: #FFA800; --chart-blue: #2563EB; --chart-gray: #9CA3AF; --chart-purple: #8B5CF6; --chart-teal: #06B6D4; }
+  [data-theme="dark"] { --chart-line: #8B7FFF; --chart-fill: rgba(139, 127, 255, 0.18); --chart-grid: rgba(255, 255, 255, 0.06); --chart-tick: #A8B0C5; --chart-red: #FF5470; --chart-green: #14C18C; --chart-orange: #FFA800; --chart-blue: #5B8DEF; --chart-gray: #6B7588; --chart-purple: #B794F6; --chart-teal: #22D3EE; }
+  .filter-bar { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); margin: 0 20px 16px; overflow: hidden; box-shadow: var(--shadow-sm); }
+  .filter-section { border-bottom: 1px solid var(--border); } .filter-section:last-child { border-bottom: none; }
+  .filter-section-header { display: flex; align-items: center; gap: 12px; width: 100%; padding: 13px 18px; background: transparent; border: none; cursor: pointer; text-align: left; font-family: inherit; color: var(--text-primary); transition: background 150ms var(--ease); }
+  .filter-section-header:hover { background: var(--bg-hover); }
+  .filter-section-header .fs-icon { font-size: 16px; width: 22px; text-align: center; } .filter-section-header .fs-title { font-weight: 700; font-size: 13px; flex: 0 0 auto; } .filter-section-header .fs-summary { flex: 1; color: var(--text-secondary); font-size: 12px; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .filter-section-header .fs-count { background: var(--accent); color: white; border-radius: 10px; padding: 1px 7px; font-size: 10px; font-weight: 700; min-width: 18px; text-align: center; } .filter-section-header .fs-count.zero { background: var(--text-muted); opacity: 0.4; } .filter-section-header .fs-chevron { color: var(--text-muted); transition: transform 200ms var(--ease); font-size: 10px; }
+  .filter-section.open .fs-chevron { transform: rotate(180deg); } .filter-section-body { display: none; padding: 16px 18px; background: var(--bg-subtle); border-top: 1px solid var(--border); } .filter-section.open .filter-section-body { display: block; }
+  .preset-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; } .preset-btn { padding: 6px 12px; border-radius: var(--radius-full); border: 1px solid var(--border-strong); background: var(--bg-card); color: var(--text-secondary); font-size: 11px; font-weight: 600; cursor: pointer; transition: all 150ms var(--ease); } .preset-btn:hover { border-color: var(--accent); color: var(--accent); } .preset-btn.active { background: var(--gradient); color: white; border-color: transparent; }
+  .date-field-row { display: flex; gap: 16px; margin-bottom: 12px; flex-wrap: wrap; } .date-field-row label { display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; color: var(--text-primary); } .date-field-row input[type="radio"] { accent-color: var(--accent); cursor: pointer; }
+  .custom-date-row { display: none; gap: 8px; align-items: center; } .custom-date-row.show { display: flex; } .custom-date-row input[type="date"] { flex: 1; padding: 7px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--bg-card); color: var(--text-primary); font-size: 12px; font-family: inherit; } .custom-date-row span { color: var(--text-muted); }
+  .filter-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; } .filter-item label { display: block; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); margin-bottom: 4px; } .filter-item select, .filter-item input[type="search"] { width: 100%; padding: 7px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--bg-card); color: var(--text-primary); font-size: 12px; font-family: inherit; } .filter-item select:focus, .filter-item input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(91,71,224,0.15); }
+  .filter-actions-row { display: flex; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .rca-kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; padding: 0 20px 16px; } .kpi-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 14px; position: relative; overflow: hidden; } .kpi-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--accent); } .kpi-card.kpi-critical::before { background: var(--danger); } .kpi-card.kpi-warn::before { background: var(--warning); } .kpi-card.kpi-success::before { background: var(--success); } .kpi-card.kpi-info::before { background: var(--info); } .kpi-label { font-size: 10px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; } .kpi-value { font-size: 22px; font-weight: 800; margin-top: 2px; letter-spacing: -0.02em; line-height: 1.1; } .kpi-sub { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+  .section-block { padding: 0 20px 20px; } .section-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 12px; gap: 12px; flex-wrap: wrap; } .section-title { margin: 0; font-size: 15px; font-weight: 700; letter-spacing: -0.01em; } .section-sub { font-size: 12px; color: var(--text-secondary); margin-top: 2px; } .section-controls { display: flex; gap: 6px; }
+  .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 0 20px 20px; } @media (max-width: 900px) { .chart-grid { grid-template-columns: 1fr; } } .chart-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px 16px; display: flex; flex-direction: column; position: relative; } .chart-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 8px; } .chart-card-title { font-size: 13px; font-weight: 700; color: var(--text-primary); } .chart-card-sub { font-size: 11px; color: var(--text-secondary); margin-top: 2px; } .chart-canvas-wrap { position: relative; flex: 1; min-height: 220px; }
+  .chart-flag-btn { position: absolute; top: 8px; right: 8px; background: transparent; border: 1px solid var(--border-strong); width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; cursor: pointer; color: var(--text-secondary); font-size: 12px; transition: all 150ms var(--ease); opacity: 0; z-index: 2; } .chart-card:hover .chart-flag-btn { opacity: 1; } .chart-flag-btn:hover { background: var(--danger-soft); color: var(--danger); border-color: var(--danger); }
+  .trend-controls { display: flex; gap: 4px; background: var(--bg-subtle); border-radius: var(--radius-full); padding: 3px; border: 1px solid var(--border); } .trend-controls button { padding: 4px 12px; border-radius: var(--radius-full); border: none; background: transparent; font-weight: 600; font-size: 11px; color: var(--text-secondary); cursor: pointer; } .trend-controls button.active { background: var(--bg-card); color: var(--accent); box-shadow: var(--shadow-sm); }
+  .phase-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; } .phase-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; transition: box-shadow 150ms var(--ease); } .phase-card:hover { box-shadow: var(--shadow-md); } .phase-card-header { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: var(--bg-subtle); border-bottom: 1px solid var(--border); } .phase-num { width: 30px; height: 30px; border-radius: 50%; background: var(--gradient); color: white; display: grid; place-items: center; font-weight: 700; font-size: 13px; flex-shrink: 0; } .phase-title { flex: 1; font-weight: 700; font-size: 13px; } .phase-rate { font-weight: 700; font-size: 13px; padding: 3px 9px; border-radius: var(--radius-full); } .phase-rate.rate-good { background: var(--success-soft); color: var(--success); } .phase-rate.rate-warn { background: var(--warning-soft); color: var(--warning); } .phase-rate.rate-bad { background: var(--danger-soft); color: var(--danger); }
+  .phase-body { padding: 10px 14px; } .phase-question { padding: 8px 0; border-bottom: 1px dashed var(--border); font-size: 12px; } .phase-question:last-child { border-bottom: none; } .phase-q-label { color: var(--text-secondary); margin-bottom: 4px; line-height: 1.4; } .phase-q-stats { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; } .pass-pill, .fail-pill { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px; } .pass-pill { background: var(--success-soft); color: var(--success); } .fail-pill { background: var(--danger-soft); color: var(--danger); } .phase-q-topfail { font-size: 10px; color: var(--text-muted); font-style: italic; margin-top: 2px; } .phase-q-actions { margin-top: 6px; display: flex; gap: 4px; } .phase-q-actions button { font-size: 10px; padding: 2px 6px; border: 1px solid var(--border-strong); background: transparent; border-radius: 4px; cursor: pointer; color: var(--text-secondary); font-family: inherit; } .phase-q-actions button:hover { background: var(--bg-hover); color: var(--accent); }
+  .question-table-wrap { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; } .question-search { width: 100%; padding: 10px 14px; border: none; border-bottom: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary); font-family: inherit; font-size: 12px; } .question-search:focus { outline: none; background: var(--bg-subtle); } .q-table { width: 100%; border-collapse: collapse; font-size: 11px; } .q-table th { background: var(--bg-subtle); color: var(--text-secondary); font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--border); } .q-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; } .q-table tbody tr:hover { background: var(--bg-hover); cursor: pointer; } .q-table .q-phase { font-weight: 700; color: var(--accent); width: 70px; } .q-table .q-label { max-width: 380px; } .q-table .q-num { font-weight: 700; text-align: right; width: 70px; } .q-table .q-rate { font-weight: 700; text-align: right; width: 80px; } .q-table .q-topfail { color: var(--text-muted); font-style: italic; font-size: 10px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .drill-wrap { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; } .drill-toolbar { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--bg-subtle); flex-wrap: wrap; gap: 8px; } .drill-count { font-size: 12px; color: var(--text-secondary); } .drill-count strong { color: var(--accent); font-weight: 700; } .drill-actions { display: flex; gap: 6px; } .drill-table-scroll { overflow-x: auto; max-height: 500px; overflow-y: auto; } .drill-table { width: 100%; min-width: 1400px; border-collapse: collapse; font-size: 11px; } .drill-table th { background: var(--bg-subtle); color: var(--text-secondary); font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; padding: 9px 10px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; position: sticky; top: 0; z-index: 1; } .drill-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .drill-table tbody tr { transition: background 100ms var(--ease); } .drill-table tbody tr:hover { background: var(--bg-hover); } .drill-table tbody tr.selected { background: var(--accent-soft); } .drill-table .select-col { width: 30px; } .drill-table input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; }
+  .defect-pill { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px; } .defect-pill-Critical, .defect-pill-Outcome { background: var(--danger-soft); color: var(--danger); } .defect-pill-Major { background: var(--warning-soft); color: var(--warning); } .defect-pill-Minor { background: var(--info-soft); color: var(--info); } .defect-pill-None { background: var(--success-soft); color: var(--success); } .defect-pill-Unknown { background: var(--bg-subtle); color: var(--text-secondary); }
+  .action-center { position: fixed; bottom: 20px; right: 20px; z-index: 9990; } .action-fab { width: 54px; height: 54px; border-radius: 50%; background: var(--gradient); color: white; border: none; cursor: pointer; display: grid; place-items: center; font-size: 20px; box-shadow: var(--shadow-lg); transition: transform 150ms var(--ease); position: relative; } .action-fab:hover { transform: scale(1.05); } .action-fab-badge { position: absolute; top: -2px; right: -2px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: var(--danger); color: white; font-size: 10px; font-weight: 700; display: none; place-items: center; border: 2px solid var(--bg-card); }
+  .action-drawer { position: fixed; bottom: 88px; right: 20px; width: 420px; max-width: calc(100vw - 40px); max-height: 75vh; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); display: none; flex-direction: column; overflow: hidden; } .action-drawer.open { display: flex; } .action-drawer-header { padding: 14px 16px; color: white; background: var(--gradient); display: flex; align-items: center; justify-content: space-between; gap: 10px; } .action-drawer-header strong { font-size: 13px; } .action-drawer-header .text-sm { font-size: 11px; opacity: 0.85; margin-top: 2px; } .action-drawer-close { background: rgba(255,255,255,0.2); border: none; color: white; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 14px; } .action-drawer-body { padding: 12px; overflow-y: auto; flex: 1; } .action-item { padding: 12px; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 8px; } .action-item label { display: block; font-size: 9px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; margin: 6px 0 3px; } .action-item input, .action-item textarea, .action-item select { width: 100%; padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--bg-card); color: var(--text-primary); font-family: inherit; font-size: 11px; box-sizing: border-box; } .action-item textarea { resize: vertical; min-height: 50px; } .action-drawer-footer { padding: 10px 12px; border-top: 1px solid var(--border); display: flex; gap: 6px; } .action-drawer-footer .btn { flex: 1; }
+  .analytics-empty { padding: 30px; text-align: center; color: var(--text-muted); font-size: 12px; } .text-muted { color: var(--text-secondary); } .text-link { color: var(--accent); text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; gap: 3px; } .text-link:hover { text-decoration: underline; } .text-link.disabled { color: var(--text-muted); cursor: not-allowed; } .action-pill { display: inline-block; font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 999px; margin-right: 2px; } .action-pill.flag { background: var(--warning-soft); color: var(--warning); } .action-pill.appeal { background: var(--info-soft); color: var(--info); } .action-pill.accepted { background: var(--success-soft); color: var(--success); }
+  .scroll-list { max-height: 300px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 4px; }
 </style>
 
-<!-- ============================================================
-     RCA RESULTS ANALYTICS VIEW
-     ============================================================ -->
-<div class="card" id="rcaAnalyticsCard">
-  <div class="card-header">
-    <div>
-      <h2 class="card-title">RCA Results Analytics</h2>
-      <div class="card-subtitle" id="rcaAnalyticsSubtitle">Loading…</div>
+<div class="analytics-view" id="analyticsView">
+  <div class="card">
+    <div class="card-header">
+      <div><h2 class="card-title">📊 RCA Results Analytics</h2><div class="card-subtitle" id="rcaAnalyticsSubtitle">Loading…</div></div>
+      <div class="flex gap-2"><button class="btn btn-ghost btn-sm" onclick="window.exportRcaCsv && window.exportRcaCsv()" title="Export current view to CSV">⬇ CSV</button><button class="btn btn-ghost btn-sm" onclick="window.loadRcaAnalytics && window.loadRcaAnalytics()">↻ Refresh</button></div>
     </div>
-    <div class="flex gap-2">
-      <button class="btn btn-ghost btn-sm" onclick="window.exportRcaCsv && window.exportRcaCsv()" title="Export current view to CSV">⬇ CSV</button>
-      <button class="btn btn-ghost btn-sm" onclick="window.loadRcaAnalytics && window.loadRcaAnalytics()">↻ Refresh</button>
+    <div class="filter-bar" id="filterBar">
+      <div class="filter-section open" data-section="timeframe">
+        <button class="filter-section-header" onclick="window.toggleFilterSection && window.toggleFilterSection('timeframe')"><span class="fs-icon">📅</span><span class="fs-title">Timeframe</span><span class="fs-summary" id="fs-summary-timeframe">Last 28 days · Review Date</span><span class="fs-count zero" id="fs-count-timeframe">0</span><span class="fs-chevron">▼</span></button>
+        <div class="filter-section-body"><div class="preset-row" id="presetRow"><button class="preset-btn" data-preset="L7">Last 7 days</button><button class="preset-btn active" data-preset="L28">Last 28 days</button><button class="preset-btn" data-preset="MTD">Month to date</button><button class="preset-btn" data-preset="QTD">Quarter to date</button><button class="preset-btn" data-preset="YTD">Year to date</button><button class="preset-btn" data-preset="ALL">All time</button><button class="preset-btn" data-preset="CUSTOM">Custom range</button></div><div class="date-field-row" id="dateFieldRow"><label><input type="radio" name="dateField" value="reviewDate" checked> Review Date</label><label><input type="radio" name="dateField" value="workDate"> Work Date</label><label><input type="radio" name="dateField" value="timestamp"> RCA Date</label></div><div class="custom-date-row" id="customDateInputs"><input type="date" id="rcaFilterFrom"><span>→</span><input type="date" id="rcaFilterTo"></div></div>
+      </div>
+      <div class="filter-section" data-section="uar"><button class="filter-section-header" onclick="window.toggleFilterSection && window.toggleFilterSection('uar')"><span class="fs-icon">📋</span><span class="fs-title">UAR Details</span><span class="fs-summary" id="fs-summary-uar">All products, countries, origins</span><span class="fs-count zero" id="fs-count-uar">0</span><span class="fs-chevron">▼</span></button><div class="filter-section-body"><div class="filter-grid"><div class="filter-item"><label>Product</label><select id="rcaFilterProduct"><option value="">All</option></select></div><div class="filter-item"><label>Country</label><select id="rcaFilterCountry"><option value="">All</option></select></div><div class="filter-item"><label>Authority</label><select id="rcaFilterAuthority"><option value="">All</option></select></div><div class="filter-item"><label>UAR Origin</label><select id="rcaFilterOrigin"><option value="">All</option></select></div><div class="filter-item"><label>Task Type</label><select id="rcaFilterTaskType"><option value="">All</option></select></div><div class="filter-item"><label>Typology</label><select id="rcaFilterTypology"><option value="">All</option></select></div></div></div></div>
+      <div class="filter-section" data-section="team"><button class="filter-section-header" onclick="window.toggleFilterSection && window.toggleFilterSection('team')"><span class="fs-icon">👥</span><span class="fs-title">Team & People</span><span class="fs-summary" id="fs-summary-team">All conductors, reviewers, analysts</span><span class="fs-count zero" id="fs-count-team">0</span><span class="fs-chevron">▼</span></button><div class="filter-section-body"><div class="filter-grid"><div class="filter-item"><label>Conductor</label><select id="rcaFilterConductor"><option value="">All</option></select></div><div class="filter-item"><label>QC Reviewer</label><select id="rcaFilterQcReviewer"><option value="">All</option></select></div><div class="filter-item"><label>Analyst</label><select id="rcaFilterAnalyst"><option value="">All</option></select></div><div class="filter-item"><label>Team</label><select id="rcaFilterTeam"><option value="">All</option></select></div><div class="filter-item"><label>Agency</label><select id="rcaFilterAgency"><option value="">All</option></select></div></div></div></div>
+      <div class="filter-section" data-section="findings"><button class="filter-section-header" onclick="window.toggleFilterSection && window.toggleFilterSection('findings')"><span class="fs-icon">🔍</span><span class="fs-title">RCA Findings</span><span class="fs-summary" id="fs-summary-findings">All defects, flags, phases</span><span class="fs-count zero" id="fs-count-findings">0</span><span class="fs-chevron">▼</span></button><div class="filter-section-body"><div class="filter-grid"><div class="filter-item"><label>Defect</label><select id="rcaFilterDefect"><option value="">All</option><option>Critical</option><option>Major</option><option>Minor</option><option>None</option><option>Unknown</option></select></div><div class="filter-item"><label>Risk Tag</label><select id="rcaFilterTag"><option value="">All</option></select></div><div class="filter-item"><label>Investigation Phase</label><select id="rcaFilterPhase"><option value="">All phases</option><option value="p1">Phase 1 — Trigger & Triage</option><option value="p2">Phase 2 — Baseline & OSINT</option><option value="p3">Phase 3 — Transaction Analysis</option><option value="p4">Phase 4 — Review Associates</option><option value="p5">Phase 5 — Determine Outcome</option><option value="p6">Phase 6 — Post-Investigation</option><option value="p7">Phase 7 — Note Quality</option></select></div><div class="filter-item"><label>QC Agree</label><select id="rcaFilterQcAgree"><option value="">All</option><option value="Yes">Agreed</option><option value="No">Disagreed</option></select></div><div class="filter-item"><label>Flagged to TL</label><select id="rcaFilterFlagToTL"><option value="">Either</option><option value="true">Yes</option><option value="false">No</option></select></div><div class="filter-item"><label>To be Appealed</label><select id="rcaFilterToBeAppealed"><option value="">Either</option><option value="true">Yes</option><option value="false">No</option></select></div><div class="filter-item"><label>Fail Accepted</label><select id="rcaFilterFailAccepted"><option value="">Either</option><option value="true">Yes</option><option value="false">No</option></select></div><div class="filter-item"><label>Already Appealed</label><select id="rcaFilterAlreadyAppealed"><option value="">Either</option><option value="true">Yes</option><option value="false">No</option></select></div><div class="filter-item" style="grid-column: 1 / -1;"><label>Search keywords / comments</label><input type="search" id="rcaFilterSearch" placeholder="e.g. money laundering, OSINT fail, country threshold…"></div></div></div></div>
+      <div class="filter-actions-row" style="padding: 12px 18px; background: var(--bg-card); border-top: 1px solid var(--border);"><button class="btn btn-primary btn-sm" id="rcaApplyBtn">Apply Filters</button><button class="btn btn-ghost btn-sm" id="rcaClearBtn">Clear All</button><span style="flex:1"></span><span class="text-muted text-sm" id="filterSummaryFooter">No filters applied</span></div>
+    </div>
+    <div class="rca-kpi-grid" id="rcaKpiGrid"></div>
+    
+    <div class="section-block">
+      <div class="chart-card">
+        <div class="chart-card-header"><div><div class="chart-card-title">📈 Defect Volume Over Time</div><div class="chart-card-sub" id="trendSubtitle">Daily / Weekly / Monthly</div></div><div class="trend-controls" id="trendControls"><button data-trend="daily" class="active" type="button">Daily</button><button data-trend="weekly" type="button">Weekly</button><button data-trend="monthly" type="button">Monthly</button></div></div>
+        <div class="chart-canvas-wrap"><canvas id="rcaTrendChart"></canvas><button class="chart-flag-btn" onclick="window.flagRootCause && window.flagRootCause({title:'Trend spike under review', source:'Defect Volume Over Time', category:'Process'})" title="Flag trend as root cause">🚩</button></div>
+      </div>
+    </div>
+
+    <div class="chart-grid">
+      <div class="chart-card"><div class="chart-card-header"><div><div class="chart-card-title">📊 By Defect (Bar)</div><div class="chart-card-sub">Distribution of critical/major/minor</div></div></div><div class="chart-canvas-wrap"><canvas id="rcaDefectTrendChart"></canvas></div></div>
+      <div class="chart-card"><div class="chart-card-header"><div><div class="chart-card-title">📊 By Defect (Line)</div><div class="chart-card-sub">Trend over time</div></div></div><div class="chart-canvas-wrap"><canvas id="rcaDefectLineChart"></canvas></div></div>
+    </div>
+
+    <div class="chart-grid">
+      <div class="chart-card"><div class="chart-card-header"><div><div class="chart-card-title">🌍 By UAR Origin (Bar)</div><div class="chart-card-sub">Top 5 dynamic to filters</div></div></div><div class="chart-canvas-wrap"><canvas id="rcaOriginChart"></canvas></div></div>
+      <div class="chart-card"><div class="chart-card-header"><div><div class="chart-card-title">🌍 By UAR Origin (Line)</div><div class="chart-card-sub">Trend over time</div></div></div><div class="chart-canvas-wrap"><canvas id="rcaOriginLineChart"></canvas></div></div>
+    </div>
+
+    <div class="chart-grid">
+      <div class="chart-card"><div class="chart-card-header"><div><div class="chart-card-title">👥 By Team (Bar)</div><div class="chart-card-sub">Top 5 dynamic to filters</div></div></div><div class="chart-canvas-wrap"><canvas id="rcaTeamChart"></canvas></div></div>
+      <div class="chart-card"><div class="chart-card-header"><div><div class="chart-card-title">👥 By Team (Line)</div><div class="chart-card-sub">Trend over time</div></div></div><div class="chart-canvas-wrap"><canvas id="rcaTeamLineChart"></canvas></div></div>
+    </div>
+
+    <div class="chart-grid">
+      <div class="chart-card"><div class="chart-card-header"><div><div class="chart-card-title">💼 By Product (Bar)</div><div class="chart-card-sub">Top 5 dynamic to filters</div></div></div><div class="chart-canvas-wrap"><canvas id="rcaProductChart"></canvas></div></div>
+      <div class="chart-card"><div class="chart-card-header"><div><div class="chart-card-title">💼 By Product (Line)</div><div class="chart-card-sub">Trend over time</div></div></div><div class="chart-canvas-wrap"><canvas id="rcaProductLineChart"></canvas></div></div>
+    </div>
+
+    <div class="chart-grid">
+      <div class="chart-card"><div class="chart-card-header"><div><div class="chart-card-title">🏷 Top Typologies (Bar)</div><div class="chart-card-sub">Top 5 dynamic to filters</div></div></div><div class="chart-canvas-wrap"><canvas id="rcaTypologyChart"></canvas></div></div>
+      <div class="chart-card"><div class="chart-card-header"><div><div class="chart-card-title">🏷 Top Typologies (Line)</div><div class="chart-card-sub">Trend over time</div></div></div><div class="chart-canvas-wrap"><canvas id="rcaTypologyLineChart"></canvas></div></div>
+    </div>
+    <div class="chart-grid">
+      <div class="chart-card"><div class="chart-card-header"><div><div class="chart-card-title">🚩 Top Risk Tags (Bar)</div><div class="chart-card-sub">Top 5 dynamic to filters</div></div></div><div class="chart-canvas-wrap"><canvas id="rcaTagChart"></canvas></div></div>
+      <div class="chart-card"><div class="chart-card-header"><div><div class="chart-card-title">🚩 Top Risk Tags (Line)</div><div class="chart-card-sub">Trend over time</div></div></div><div class="chart-canvas-wrap"><canvas id="rcaTagLineChart"></canvas></div></div>
+    </div>
+
+    <div class="section-block">
+      <div class="section-header"><div><div class="section-title">🎯 Investigation Phase Analysis</div><div class="section-sub">Pass rates and top failure reasons per checklist question</div></div><div class="section-controls"><button class="btn btn-ghost btn-sm" onclick="window.expandAllPhases && window.expandAllPhases(true)">Expand all</button><button class="btn btn-ghost btn-sm" onclick="window.expandAllPhases && window.expandAllPhases(false)">Collapse all</button></div></div>
+      <div class="phase-grid" id="phaseGrid"></div>
+    </div>
+
+    <div class="section-block">
+      <div class="section-header"><div><div class="section-title">📋 Question-Level Breakdown</div><div class="section-sub">Click any question row to drill down into those specific RCAs</div></div></div>
+      <div class="question-table-wrap"><input type="search" class="question-search" id="questionSearch" placeholder="Search questions…"><table class="q-table"><thead><tr><th>Phase</th><th>Question</th><th>Pass</th><th>Fail</th><th>Fail Rate</th><th>Top Failure Reason</th><th>Action</th></tr></thead><tbody id="questionBody"></tbody></table></div>
+    </div>
+
+    <div class="chart-grid">
+      <div class="chart-card"><div class="chart-card-header"><div><div class="chart-card-title">⏱ Cycle Time Trends</div><div class="chart-card-sub">Work→QC vs QC→RCA (weekly)</div></div></div><div class="chart-canvas-wrap"><canvas id="rcaCycleChart"></canvas></div></div>
+      <div class="chart-card"><div class="chart-card-header"><div><div class="chart-card-title">🤝 Agreement Rate</div><div class="chart-card-sub">% of RCAs where reviewer agreed with QC</div></div></div><div class="chart-canvas-wrap"><canvas id="rcaAgreementChart"></canvas></div></div>
+    </div>
+    <div class="chart-grid">
+      <div class="chart-card"><div class="chart-card-header"><div><div class="chart-card-title">⚖️ Systemic vs Human Error</div><div class="chart-card-sub">Error source × system fail</div></div></div><div class="chart-canvas-wrap"><canvas id="rcaSystemicChart"></canvas></div></div>
+      <div class="chart-card"><div class="chart-card-header"><div><div class="chart-card-title">📉 Failure Pareto</div><div class="chart-card-sub">Top failure reasons. <i>Exclude generic 'Other/Yes/No'. Use to identify systemic issues.</i></div></div></div><div class="chart-canvas-wrap"><canvas id="rcaParetoChart"></canvas></div></div>
+    </div>
+
+    <div class="chart-grid">
+      <div class="chart-card"><div class="chart-card-title" style="margin-bottom:10px;">🏆 Top 10 RCA Conductors</div><div class="scroll-list" id="rcaTopConductors"></div></div>
+      <div class="chart-card"><div class="chart-card-title" style="margin-bottom:10px;">🏆 Top 10 QC Reviewers</div><div class="scroll-list" id="rcaTopQcReviewers"></div></div>
+    </div>
+
+    <div class="section-block">
+      <div class="section-header"><div><div class="section-title">🤖 LLM Output Analysis</div><div class="section-sub">Failed LLM outputs by phase over time</div></div></div>
+      <div class="chart-grid">
+        <div class="chart-card"><div class="chart-card-header"><div><div class="chart-card-title">LLM Failures per Phase</div></div></div><div class="chart-canvas-wrap"><canvas id="rcaLlmBarChart"></canvas></div></div>
+        <div class="chart-card"><div class="chart-card-header"><div><div class="chart-card-title">LLM Failures Over Time</div></div></div><div class="chart-canvas-wrap"><canvas id="rcaLlmLineChart"></canvas></div></div>
+      </div>
+    </div>
+
+    <div class="section-block">
+      <div class="section-header"><div><div class="section-title">📋 Drill-down · <span id="rcaTableCount">0</span> rows</div><div class="section-sub">Select rows to review or flag</div></div></div>
+      <div class="drill-wrap">
+        <div class="drill-toolbar">
+          <div class="drill-count"><strong id="selectedCount">0</strong> selected · <span id="rcaPaginationInfo">—</span></div>
+          <div class="drill-actions">
+            <button class="btn btn-ghost btn-sm" onclick="window.clearRowSelection && window.clearRowSelection()">Clear</button>
+            <button class="btn btn-secondary btn-sm" onclick="window.reviewSelected && window.reviewSelected()">📝 Review selected</button>
+            <button class="btn btn-secondary btn-sm" onclick="window.flagSelected && window.flagSelected()">🚩 Flag selected</button>
+          </div>
+        </div>
+        <div class="drill-table-scroll">
+          <table class="drill-table"><thead><tr><th class="select-col"><input type="checkbox" id="selectAllRows" onchange="window.toggleSelectAll && window.toggleSelectAll(this.checked)"></th><th>Timestamp</th><th>Case ID</th><th>Defect</th><th>Product</th><th>Analyst</th><th>QC Reviewer</th><th>Error Source</th><th>Score</th><th>Flags</th><th>Links</th><th>Cycle (d)</th><th>Comments</th></tr></thead><tbody id="rcaTableBody"></tbody></table>
+        </div>
+        <div class="pagination" style="border-top: 1px solid var(--border);"><div class="pagination-info" id="rcaTablePaginationInfo">—</div><div class="pagination-controls" id="rcaPaginationControls"></div></div>
+      </div>
     </div>
   </div>
+</div>
 
-  <!-- ═══════════════ FILTER BAR ═══════════════ -->
-  <div class="analytics-filter-bar">
-    <div class="filter-group" style="flex:1.4; min-width:260px;">
-      <label>Date Range <span class="text-muted" style="text-transform:none;">·</span>
-        <span class="date-target-chip">
-          <span style="font-size:10px; color:var(--text-muted);">on</span>
-          <select id="rcaFilterDateField" onchange="window.loadRcaAnalytics && window.loadRcaAnalytics()">
-            <option value="timestamp">Timestamp</option>
-            <option value="reviewDate">Review Date</option>
-            <option value="workDate">Work Date</option>
-          </select>
-        </span>
-      </label>
-      <div class="flex gap-1">
-        <input type="date" id="rcaFilterFrom" onchange="window.loadRcaAnalytics && window.loadRcaAnalytics()">
-        <span style="align-self:center; color:var(--text-muted);">→</span>
-        <input type="date" id="rcaFilterTo" onchange="window.loadRcaAnalytics && window.loadRcaAnalytics()">
-      </div>
+<div class="action-center">
+  <button class="action-fab" id="actionFab" onclick="window.toggleActionDrawer && window.toggleActionDrawer()" title="Root cause action queue">🚩<span class="action-fab-badge" id="actionBadge">0</span></button>
+  <div class="action-drawer" id="actionDrawer">
+    <div class="action-drawer-header">
+      <div><strong>🚩 Root Cause Queue</strong><div class="text-sm">Items to log as Jira subtasks</div></div>
+      <button class="action-drawer-close" onclick="window.toggleActionDrawer && window.toggleActionDrawer()">×</button>
     </div>
-
-    <div class="filter-group" style="flex:1.2; min-width:200px;">
-      <label>Search comments / details</label>
-      <input type="search" class="analytics-search" id="rcaFilterSearch" placeholder="e.g., money laundering, OSINT fail…">
-    </div>
-
-    <div class="filter-group">
-      <label>Conductor</label>
-      <select id="rcaFilterConductor"><option value="">All</option></select>
-    </div>
-    <div class="filter-group">
-      <label>QC Reviewer</label>
-      <select id="rcaFilterQcReviewer"><option value="">All</option></select>
-    </div>
-    <div class="filter-group">
-      <label>Analyst</label>
-      <select id="rcaFilterAnalyst"><option value="">All</option></select>
-    </div>
-    <div class="filter-group">
-      <label>Team</label>
-      <select id="rcaFilterTeam"><option value="">All</option></select>
-    </div>
-    <div class="filter-group">
-      <label>Agency</label>
-      <select id="rcaFilterAgency"><option value="">All</option></select>
-    </div>
-    <div class="filter-group">
-      <label>Product</label>
-      <select id="rcaFilterProduct"><option value="">All</option></select>
-    </div>
-    <div class="filter-group">
-      <label>Country</label>
-      <select id="rcaFilterCountry"><option value="">All</option></select>
-    </div>
-    <div class="filter-group">
-      <label>Authority</label>
-      <select id="rcaFilterAuthority"><option value="">All</option></select>
-    </div>
-    <div class="filter-group">
-      <label>UAR Origin</label>
-      <select id="rcaFilterOrigin"><option value="">All</option></select>
-    </div>
-    <div class="filter-group">
-      <label>Task Type</label>
-      <select id="rcaFilterTaskType"><option value="">All</option></select>
-    </div>
-    <div class="filter-group">
-      <label>Error Source</label>
-      <select id="rcaFilterErrorSource"><option value="">All</option></select>
-    </div>
-    <div class="filter-group">
-      <label>QC Agree</label>
-      <select id="rcaFilterQcAgree">
-        <option value="">All</option>
-        <option value="Yes">Yes (Agree)</option>
-        <option value="No">No (Disagree)</option>
-      </select>
-    </div>
-    <div class="filter-group">
-      <label>Defect</label>
-      <select id="rcaFilterDefect">
-        <option value="">All</option>
-        <option value="Critical">Critical</option>
-        <option value="None">None</option>
-        <option value="Unknown">Unknown</option>
-      </select>
-    </div>
-    <div class="filter-group">
-      <label>Typology</label>
-      <select id="rcaFilterTypology"><option value="">All</option></select>
-    </div>
-    <div class="filter-group">
-      <label>Risk Tag</label>
-      <select id="rcaFilterTag"><option value="">All</option></select>
-    </div>
-
-    <div class="filter-group">
-      <label>Flagged to TL</label>
-      <select id="rcaFilterFlagToTL">
-        <option value="">Either</option><option value="true">Yes</option><option value="false">No</option>
-      </select>
-    </div>
-    <div class="filter-group">
-      <label>To be Appealed</label>
-      <select id="rcaFilterToBeAppealed">
-        <option value="">Either</option><option value="true">Yes</option><option value="false">No</option>
-      </select>
-    </div>
-    <div class="filter-group">
-      <label>Fail Accepted</label>
-      <select id="rcaFilterFailAccepted">
-        <option value="">Either</option><option value="true">Yes</option><option value="false">No</option>
-      </select>
-    </div>
-
-    <div class="filter-actions">
-      <button class="btn btn-secondary btn-sm" id="rcaApplyBtn">Apply</button>
-      <button class="btn btn-ghost btn-sm" id="rcaClearBtn">Clear</button>
-    </div>
-  </div>
-
-  <!-- ═══════════════ KPI CARDS ═══════════════ -->
-  <div class="rca-kpi-grid" id="rcaKpiGrid"></div>
-
-  <!-- ═══════════════ TREND CHART ═══════════════ -->
-  <div style="padding: 0 20px 20px;">
-    <div class="chart-card">
-      <div class="chart-card-header">
-        <div>
-          <div class="chart-card-title">📈 Defect Volume Over Time</div>
-          <div class="chart-card-sub" id="trendSubtitle">Daily / Weekly / Monthly</div>
-        </div>
-        <div class="trend-controls" id="trendControls">
-          <button data-trend="daily"   class="active" type="button">Daily</button>
-          <button data-trend="weekly"  type="button">Weekly</button>
-          <button data-trend="monthly" type="button">Monthly</button>
-        </div>
-      </div>
-      <div class="chart-canvas-wrap"><canvas id="rcaTrendChart"></canvas></div>
-    </div>
-  </div>
-
-  <!-- ═══════════════ CYCLE TIME TREND ═══════════════ -->
-  <div class="chart-grid">
-    <div class="chart-card">
-      <div class="chart-card-header">
-        <div>
-          <div class="chart-card-title">⏱ Cycle Time Trends (Weekly)</div>
-          <div class="chart-card-sub">Work→QC vs QC→RCA average days</div>
-        </div>
-      </div>
-      <div class="chart-canvas-wrap"><canvas id="rcaCycleChart"></canvas></div>
-    </div>
-
-    <div class="chart-card">
-      <div class="chart-card-header">
-        <div>
-          <div class="chart-card-title">🎯 Phase Failure Breakdown</div>
-          <div class="chart-card-sub">% of "No" responses per investigation phase</div>
-        </div>
-      </div>
-      <div id="rcaPhaseFailure"></div>
-    </div>
-  </div>
-
-  <!-- ═══════════════ TYPOLOGIES, TAGS, SYSTEMIC ═══════════════ -->
-  <div class="chart-grid">
-    <div class="chart-card">
-      <div class="chart-card-header">
-        <div>
-          <div class="chart-card-title">🏷 Top Typologies</div>
-          <div class="chart-card-sub">Across all RCAs in range</div>
-        </div>
-      </div>
-      <div id="rcaTopTypologies"></div>
-    </div>
-
-    <div class="chart-card">
-      <div class="chart-card-header">
-        <div>
-          <div class="chart-card-title">🚩 Top Risk Tags</div>
-          <div class="chart-card-sub">Across all RCAs in range</div>
-        </div>
-      </div>
-      <div id="rcaTopRiskTags"></div>
-    </div>
-  </div>
-
-  <div class="chart-grid">
-    <div class="chart-card">
-      <div class="chart-card-header">
-        <div>
-          <div class="chart-card-title">⚖️ Systemic vs Human Error</div>
-          <div class="chart-card-sub">Error Source × System Process Fail</div>
-        </div>
-      </div>
-      <div class="chart-canvas-wrap" style="display:flex; align-items:center; gap: 16px;">
-        <div style="flex: 0 0 180px;"><canvas id="rcaSystemicChart"></canvas></div>
-        <div class="donut-legend" id="rcaSystemicLegend" style="flex:1;"></div>
-      </div>
-    </div>
-
-    <div class="chart-card">
-      <div class="chart-card-header">
-        <div>
-          <div class="chart-card-title">🤝 Agreement Rate</div>
-          <div class="chart-card-sub">% of RCAs where reviewer agreed with QC</div>
-        </div>
-      </div>
-      <div class="chart-canvas-wrap"><canvas id="rcaAgreementChart"></canvas></div>
-    </div>
-  </div>
-
-  <!-- ═══════════════ EXISTING BREAKDOWNS ═══════════════ -->
-  <div class="chart-grid">
-    <div class="chart-card">
-      <div class="chart-card-title" style="margin-bottom: 10px;">By Defect Type</div>
-      <div id="rcaDefectBreakdown"></div>
-    </div>
-    <div class="chart-card">
-      <div class="chart-card-title" style="margin-bottom: 10px;">🏆 Top RCA Conductors</div>
-      <div id="rcaTopConductors"></div>
-    </div>
-  </div>
-
-  <div class="chart-grid">
-    <div class="chart-card">
-      <div class="chart-card-title" style="margin-bottom: 10px;">By Team</div>
-      <div id="rcaTeamBreakdown"></div>
-    </div>
-    <div class="chart-card">
-      <div class="chart-card-title" style="margin-bottom: 10px;">🏆 Top QC Reviewers</div>
-      <div id="rcaTopQcReviewers"></div>
-    </div>
-  </div>
-
-  <!-- ═══════════════ EXTRA CHARTS (✅ FIX — canvases were missing) ═══════════════ -->
-  <div class="chart-grid">
-    <div class="chart-card">
-      <div class="chart-card-header">
-        <div>
-          <div class="chart-card-title">📊 Defect Trend (Stacked)</div>
-          <div class="chart-card-sub">Click a bar to filter that day</div>
-        </div>
-      </div>
-      <div class="chart-canvas-wrap"><canvas id="rcaDefectTrendChart"></canvas></div>
-    </div>
-    <div class="chart-card">
-      <div class="chart-card-header">
-        <div>
-          <div class="chart-card-title">📉 Failure Pareto</div>
-          <div class="chart-card-sub">Click a bar to search that reason</div>
-        </div>
-      </div>
-      <div class="chart-canvas-wrap"><canvas id="rcaParetoChart"></canvas></div>
-    </div>
-  </div>
-
-  <div class="chart-grid">
-    <div class="chart-card">
-      <div class="chart-card-header">
-        <div>
-          <div class="chart-card-title">🎯 Analyst Matrix</div>
-          <div class="chart-card-sub">Cases vs avg score · bubble size = cycle days</div>
-        </div>
-      </div>
-      <div class="chart-canvas-wrap"><canvas id="rcaScatterChart"></canvas></div>
-    </div>
-    <div class="chart-card">
-      <div class="chart-card-header">
-        <div>
-          <div class="chart-card-title">⏳ Cycle Time Distribution</div>
-          <div class="chart-card-sub">Days to complete each leg</div>
-        </div>
-      </div>
-      <div class="chart-canvas-wrap"><canvas id="rcaCycleHistogram"></canvas></div>
-    </div>
-  </div>
-
-  <div style="padding: 0 20px 20px;">
-    <div class="chart-card">
-      <div class="chart-card-header">
-        <div>
-          <div class="chart-card-title">🔥 Phase Failure Heatmap (Monthly)</div>
-          <div class="chart-card-sub">Click any cell to filter that month</div>
-        </div>
-      </div>
-      <div id="rcaPhaseHeatmap" style="padding:8px;"></div>
-    </div>
-  </div>
-
-  <!-- ═══════════════ DRILL-DOWN TABLE ═══════════════ -->
-  <div style="padding: 0 20px 20px;">
-    <div class="card-header" style="padding: 0 0 12px;">
-      <h3 class="card-title" style="font-size: 14px;">📋 Drill-down · <span id="rcaTableCount">0</span> rows</h3>
-      <div class="text-sm text-muted">Hover text cells to see full content · click column headers would require server sort (TODO)</div>
-    </div>
-    <div class="table-scroll">
-      <table class="data-table rca-table">
-        <thead>
-          <tr>
-            <th>Timestamp</th>
-            <th>Case ID</th>
-            <th>Defect</th>
-            <th>Product</th>
-            <th>Analyst</th>
-            <th>QC Reviewer</th>
-            <th>Error Source</th>
-            <th>Score</th>
-            <th>Flags</th>
-            <th>Links</th>
-            <th>Cycle (d)</th>
-            <th>Comments</th>
-            <th>Sys/Proc Details</th>
-            <th>Suggested Update</th>
-          </tr>
-        </thead>
-        <tbody id="rcaTableBody"></tbody>
-      </table>
-    </div>
-    <div class="pagination">
-      <div class="pagination-info" id="rcaPaginationInfo">—</div>
-      <div class="pagination-controls" id="rcaPaginationControls"></div>
+    <div class="action-drawer-body" id="actionDrawerBody"></div>
+    <div class="action-drawer-footer">
+      <button class="btn btn-secondary btn-sm" onclick="window.pushAllToSheet && window.pushAllToSheet()">💾 Save to Sheet</button>
+      <button class="btn btn-primary btn-sm" onclick="window.exportJiraCsv && window.exportJiraCsv()">📤 Jira CSV</button>
     </div>
   </div>
 </div>
@@ -465,803 +155,594 @@
 <script>
 (function () {
   'use strict';
+  window.actionCart = window.actionCart || [];
+  const appState = { analytics: null, selectedRows: new Set(), drillDown: { rows: [], total: 0, page: 1, pageSize: 25 }, trendMode: 'daily', questionFilter: '', expandedPhases: new Set([1, 2]) };
+  let rcaFilters = {}; let _debounce = null; let charts = {};
+  const KPI_WARN_DAYS = 7; const PHASE_CONFIG = buildPhaseConfig(); const PAGE_SIZE = 25;
+  
+  const $ = (id) => document.getElementById(id);
+  const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const escapeHtml = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  const fmtPct = (n) => (n == null || isNaN(n)) ? '0%' : Math.round(n) + '%';
+  const fmtNum = (n) => (n || 0).toLocaleString();
+  const debounce = (fn, ms) => { clearTimeout(_debounce); _debounce = setTimeout(fn, ms); };
+  const destroyChart = (k) => { if (charts[k]) { try { charts[k].destroy(); } catch(e){} charts[k] = null; } };
 
-  let rcaAnalyticsData = null;
-  let charts = { trend: null, cycle: null, systemic: null, agreement: null,
-                 defectTrend: null, pareto: null, scatter: null, cycleHist: null };
-  let rcaTrendMode  = 'daily';
-  let rcaTablePage  = 1;
-  const RCA_PAGE_SIZE = 25;
-  let rcaFilters    = {};
-  let _rcaDebounce  = null;
-  let actionCart = [];
+  function setAnalyticsConn(st, txt) { const d = $('connectionDot'), l = $('connectionLabel'); if (d) d.className = 'connection-dot ' + st; if (l) l.textContent = txt; }
+  function showToast(o) { if (typeof window.showToast === 'function') return window.showToast(o); console.log('TOAST:', o.title, o.description || ''); }
 
-  // ✅ FIX — robust updateActionBadge that targets the badge element specifically
-  function updateActionBadge() {
-    const badge = document.getElementById('actionBadge');
-    if (!badge) return;
-    if (actionCart.length === 0) {
-      badge.style.display = 'none';
-    } else {
-      badge.style.display = 'grid';
-      badge.textContent = actionCart.length;
-    }
-  }
-
-  window.loadRcaAnalytics = loadRcaAnalytics;
-  window.clearRcaFilters  = clearRcaFilters;
-  window.exportRcaCsv     = exportRcaCsv;
-  window.quickFilterBy    = quickFilterBy;
-  window.loadRcaTable       = loadRcaTable;
-  window.onRcaTableLoaded   = onRcaTableLoaded;
-  window.getRcaFiltersFromUi = getRcaFiltersFromUi;
-  window.toggleActionDrawer = toggleActionDrawer;
-  window.flagInsight = flagInsight;
-  window.removeActionItem = removeActionItem;
-  window.submitActionItem = submitActionItem;
-  window.pushAllToSheet = pushAllToSheet;
-  window.exportJiraCsv = exportJiraCsv;
-  window.filterByMonth = filterByMonth;
-  window.updateActionBadge = updateActionBadge;
-
-  document.addEventListener('DOMContentLoaded', () => {
-    const $ = (id) => document.getElementById(id);
-
-    document.querySelectorAll('#trendControls button').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const mode = btn.dataset.trend;
-        if (!mode) return;
-        rcaTrendMode = mode;
-        document.querySelectorAll('#trendControls button').forEach(b => b.classList.toggle('active', b === btn));
-        if (rcaAnalyticsData) renderTrendChart(rcaAnalyticsData);
-      });
-    });
-
-    $('rcaApplyBtn')?.addEventListener('click', loadRcaAnalytics);
-    $('rcaClearBtn')?.addEventListener('click', clearRcaFilters);
-
-    $('rcaFilterSearch')?.addEventListener('input', () => {
-      clearTimeout(_rcaDebounce);
-      _rcaDebounce = setTimeout(loadRcaAnalytics, 350);
-    });
-
-    ['rcaFilterFrom','rcaFilterTo','rcaFilterDateField'].forEach(id => {
-      $(id)?.addEventListener('change', loadRcaAnalytics);
-    });
-  });
-
-  function loadRcaAnalytics() {
-    clearTimeout(_rcaDebounce);
-    _rcaDebounce = setTimeout(_loadRcaAnalyticsNow, 80);
-  }
-
-  function _loadRcaAnalyticsNow() {
-    setConn('busy', 'Loading analytics…');
-    rcaFilters = getRcaFiltersFromUi();
-
-    google.script.run
-      .withSuccessHandler(onRcaAnalyticsLoaded)
-      .withFailureHandler(err => {
-        setConn('offline', 'Error');
-        showToast({ title: 'Analytics error', description: (err && err.message) || String(err), type: 'error' });
-      })
-      .getRcaAnalytics(rcaFilters);
-  }
-
-  function onRcaAnalyticsLoaded(resp) {
-    if (!resp || !resp.success) {
-      setConn('offline', 'Error');
-      showToast({ title: 'Failed', description: (resp && resp.error) || 'Unknown error', type: 'error' });
-      return;
-    }
-    rcaAnalyticsData = resp.analytics;
-    setConn('online', 'Ready');
-
-    const subEl = document.getElementById('rcaAnalyticsSubtitle');
-    if (subEl) {
-      subEl.textContent =
-        `${(resp.total || 0).toLocaleString()} RCAs in range · ${rcaAnalyticsData.thisWeek || 0} this week · ${rcaAnalyticsData.thisMonth || 0} this month`;
-    }
-
-    populateFilterDropdowns(rcaAnalyticsData);
-    renderKpis(rcaAnalyticsData);
-    renderTrendChart(rcaAnalyticsData);
-    renderCycleChart(rcaAnalyticsData);
-    renderPhaseFailure(rcaAnalyticsData);
-    renderTypologies(rcaAnalyticsData);
-    renderRiskTags(rcaAnalyticsData);
-    renderSystemicChart(rcaAnalyticsData);
-    renderAgreementChart(rcaAnalyticsData);
-    renderBreakdowns(rcaAnalyticsData);
-
-    renderDefectTrendChart(rcaAnalyticsData);
-    renderParetoChart(rcaAnalyticsData);
-    renderScatterChart(rcaAnalyticsData);
-    renderCycleHistogram(rcaAnalyticsData);
-    renderPhaseHeatmap(rcaAnalyticsData);
-
-    loadRcaTable(1);
-  }
-
-  function getRcaFiltersFromUi() {
-    const v = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
-    const bool = (id) => {
-      const x = v(id);
-      if (x === '') return undefined;
-      return x === 'true';
-    };
-    return {
-      dateField:    v('rcaFilterDateField') || 'timestamp',
-      dateFrom:     v('rcaFilterFrom'),
-      dateTo:       v('rcaFilterTo'),
-      search:       v('rcaFilterSearch'),
-      conductor:    v('rcaFilterConductor'),
-      qcReviewer:   v('rcaFilterQcReviewer'),
-      analyst:      v('rcaFilterAnalyst'),
-      team:         v('rcaFilterTeam'),
-      agency:       v('rcaFilterAgency'),
-      product:      v('rcaFilterProduct'),
-      country:      v('rcaFilterCountry'),
-      authority:    v('rcaFilterAuthority'),
-      origin:       v('rcaFilterOrigin'),
-      taskType:     v('rcaFilterTaskType'),
-      errorSource:  v('rcaFilterErrorSource'),
-      rcaAgree:     v('rcaFilterQcAgree'),
-      defect:       v('rcaFilterDefect'),
-      typology:     v('rcaFilterTypology'),
-      tag:          v('rcaFilterTag'),
-      flagToTL:     bool('rcaFilterFlagToTL'),
-      toBeAppealed: bool('rcaFilterToBeAppealed'),
-      failAccepted: bool('rcaFilterFailAccepted')
-    };
-  }
-
-  // ✅ FIX — Replaced useless `=== ? '' : ''` ternary with proper reset logic
-  function clearRcaFilters() {
-    const ids = [
-      'rcaFilterFrom','rcaFilterTo','rcaFilterSearch',
-      'rcaFilterConductor','rcaFilterQcReviewer','rcaFilterAnalyst',
-      'rcaFilterTeam','rcaFilterAgency','rcaFilterProduct','rcaFilterCountry',
-      'rcaFilterAuthority','rcaFilterOrigin','rcaFilterTaskType',
-      'rcaFilterErrorSource','rcaFilterQcAgree','rcaFilterDefect',
-      'rcaFilterTypology','rcaFilterTag','rcaFilterFlagToTL',
-      'rcaFilterToBeAppealed','rcaFilterFailAccepted'
+  function buildPhaseConfig() {
+    return [
+      { num: 1, title: 'Trigger & Triage', questions: [ { key: 'p1Scope', label: 'Correctly identified Full vs Short investigation' }, { key: 'duplicateIdentified', label: 'Correctly identified duplicate UAR', hasNa: true }, { key: 'p1DuplicateAction', label: 'Offboarding status of previous account checked', hasNa: true }, { key: 'p1MultiSuspect', label: 'Multi-suspect on UAR identified', hasNa: true } ]},
+      { num: 2, title: 'Baseline & OSINT', questions: [ { key: 'p2Baseline', label: 'Baseline checks (KYC, chat, name matches)', reasonKey: 'p2BaselineFail' }, { key: 'p2Osint', label: 'OSINT checks (employment, address, subject)', reasonKey: 'p2OsintFail' }, { key: 'p2OsintDoc', label: 'OSINT findings documented in RBI', hasNa: true } ]},
+      { num: 3, title: 'Transaction Analysis', questions: [ { key: 'p3Baseline', label: 'Transaction baseline (thresholds, profile)', reasonKey: 'p3BaselineFail' }, { key: 'p3Module', label: 'Module checks (4EC, typology, sanctions)', reasonKey: 'p3ModuleFail' } ]},
+      { num: 4, title: 'Review Associates', questions: [ { key: 'p4ShortFull', label: 'Correctly identified short vs full associate review' }, { key: 'p4CorrectAll', label: 'Correct outcome on all associates' } ]},
+      { num: 5, title: 'Determine Outcome', questions: [ { key: 'p5Decision', label: 'Correct overall decision (reject / report / EDD)', reasonKey: 'p5ActionError' } ]},
+      { num: 6, title: 'Post-Investigation Actions', questions: [ { key: 'p6Edd', label: 'EDD applied correctly with restrictions', hasNa: true }, { key: 'p6Juris', label: 'Jurisdictional requirements in notes', hasNa: true }, { key: 'p6Template', label: 'RBI / 4EC / remediation note template', hasNa: true }, { key: 'p6Dante', label: 'Dante questions answered correctly', hasNa: true }, { key: 'p6Tags', label: 'Manual tag removal and FIU restrictions lifted', hasNa: true }, { key: 'p6Alerts', label: 'Alerts tab clear of pending alerts' }, { key: 'p6Offboard', label: 'Offboarding applied correctly', hasNa: true }, { key: 'p6Suspects', label: 'Guilty associates added as suspects', hasNa: true }, { key: 'p6Refunds', label: 'Refunds / repatriations applied', hasNa: true } ]},
+      { num: 7, title: 'Note Quality (Manual)', questions: [ { key: 'p7Vague', label: 'No vague / unsubstantiated claims' }, { key: 'p7BrokenStrings', label: 'No broken strings or missing variables', hasNa: true }, { key: 'p7UpstreamFlags', label: 'Upstream red flags explicitly addressed', hasNa: true }, { key: 'p7ExtEnquiry', label: 'External enquiries described, internal links excluded', hasNa: true } ]}
     ];
-    ids.forEach(id => {
-      const el = document.getElementById(id);
-      if (!el) return;
-      el.value = '';
-    });
+  }
+
+  window.toggleFilterSection = function(sectionId) { const el = document.querySelector(`[data-section="${sectionId}"]`); if (!el) return; el.classList.toggle('open'); };
+  window.applyDatePreset = function(preset) {
+    document.querySelectorAll('.preset-btn').forEach(b => b.classList.toggle('active', b.dataset.preset === preset));
+    const today = new Date(); const fmt = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const from = $('rcaFilterFrom'), to = $('rcaFilterTo'), customRow = $('customDateInputs');
+    if (preset === 'ALL') { from.value = ''; to.value = ''; customRow.classList.remove('show'); }
+    else if (preset === 'CUSTOM') { customRow.classList.add('show'); }
+    else {
+      customRow.classList.remove('show'); const start = new Date(today);
+      if (preset === 'L7') start.setDate(today.getDate() - 7);
+      if (preset === 'L28') start.setDate(today.getDate() - 28);
+      if (preset === 'MTD') start.setDate(1);
+      if (preset === 'QTD') { const q = Math.floor(today.getMonth() / 3) * 3; start.setMonth(q, 1); }
+      if (preset === 'YTD') start.setMonth(0, 1);
+      from.value = fmt(start); to.value = fmt(today);
+    }
     loadRcaAnalytics();
+  };
+
+  function gatherFilters() {
+    const v = (id) => { const el = $(id); return el ? el.value : ''; };
+    const bool = (id) => { const x = v(id); if (x === '') return undefined; return x === 'true'; };
+    const dateFieldEl = document.querySelector('input[name="dateField"]:checked');
+    return { dateField: dateFieldEl ? dateFieldEl.value : 'reviewDate', dateFrom: v('rcaFilterFrom'), dateTo: v('rcaFilterTo'), search: v('rcaFilterSearch'),
+      conductor: v('rcaFilterConductor'), qcReviewer: v('rcaFilterQcReviewer'), analyst: v('rcaFilterAnalyst'), team: v('rcaFilterTeam'), agency: v('rcaFilterAgency'),
+      product: v('rcaFilterProduct'), country: v('rcaFilterCountry'), authority: v('rcaFilterAuthority'), origin: v('rcaFilterOrigin'), taskType: v('rcaFilterTaskType'),
+      errorSource: v('rcaFilterErrorSource'), rcaAgree: v('rcaFilterQcAgree'), defect: v('rcaFilterDefect'), typology: v('rcaFilterTypology'), tag: v('rcaFilterTag'),
+      investigationPhase: v('rcaFilterPhase'), flagToTL: bool('rcaFilterFlagToTL'), toBeAppealed: bool('rcaFilterToBeAppealed'), failAccepted: bool('rcaFilterFailAccepted'), alreadyAppealed: bool('rcaFilterAlreadyAppealed') };
+  }
+
+  function updateFilterSummaries() {
+    const f = gatherFilters();
+    const activePreset = document.querySelector('.preset-btn.active'); const preset = activePreset ? activePreset.dataset.preset : 'L28';
+    const presetLabel = { L7:'Last 7 days', L28:'Last 28 days', MTD:'Month to date', QTD:'Quarter to date', YTD:'Year to date', ALL:'All time', CUSTOM:'Custom range' }[preset] || preset;
+    const fieldLabel = { reviewDate:'Review Date', workDate:'Work Date', timestamp:'RCA Date' }[f.dateField] || 'Review Date';
+    $('fs-summary-timeframe').textContent = `${presetLabel} · ${fieldLabel}`;
+    $('fs-count-timeframe').textContent = (preset === 'L28' ? 0 : 1); $('fs-count-timeframe').classList.toggle('zero', preset === 'L28');
+    const uarCount = ['rcaFilterProduct','rcaFilterCountry','rcaFilterAuthority','rcaFilterOrigin','rcaFilterTaskType','rcaFilterTypology'].filter(id => $(id) && $(id).value).length;
+    $('fs-count-uar').textContent = uarCount; $('fs-count-uar').classList.toggle('zero', uarCount === 0);
+    const teamCount = ['rcaFilterConductor','rcaFilterQcReviewer','rcaFilterAnalyst','rcaFilterTeam','rcaFilterAgency'].filter(id => $(id) && $(id).value).length;
+    $('fs-count-team').textContent = teamCount; $('fs-count-team').classList.toggle('zero', teamCount === 0);
+    const findingsCount = ['rcaFilterDefect','rcaFilterTag','rcaFilterPhase','rcaFilterQcAgree','rcaFilterFlagToTL','rcaFilterToBeAppealed','rcaFilterFailAccepted','rcaFilterAlreadyAppealed','rcaFilterSearch'].filter(id => $(id) && $(id).value).length;
+    $('fs-count-findings').textContent = findingsCount; $('fs-count-findings').classList.toggle('zero', findingsCount === 0);
+    const total = uarCount + teamCount + findingsCount + (preset === 'L28' ? 0 : 1);
+    $('filterSummaryFooter').textContent = total === 0 ? 'No filters applied (defaults: L28, Review Date)' : `${total} filter${total === 1 ? '' : 's'} active`;
+  }
+
+  window.clearRcaFilters = function() {
+    ['rcaFilterSearch','rcaFilterConductor','rcaFilterQcReviewer','rcaFilterAnalyst','rcaFilterTeam','rcaFilterAgency','rcaFilterProduct','rcaFilterCountry','rcaFilterAuthority','rcaFilterOrigin','rcaFilterTaskType','rcaFilterErrorSource','rcaFilterQcAgree','rcaFilterDefect','rcaFilterTypology','rcaFilterTag','rcaFilterFlagToTL','rcaFilterToBeAppealed','rcaFilterFailAccepted','rcaFilterAlreadyAppealed','rcaFilterPhase'].forEach(id => { const el = $(id); if (el) el.value = ''; });
+    applyDatePreset('L28');
+    const rf = document.querySelector('input[name="dateField"][value="reviewDate"]'); if (rf) rf.checked = true;
+    updateFilterSummaries();
+  };
+
+  window.loadRcaAnalytics = function() {
+    setAnalyticsConn('busy', 'Loading analytics…'); rcaFilters = gatherFilters(); updateFilterSummaries();
+    google.script.run.withSuccessHandler(onAnalyticsLoaded).withFailureHandler(err => { setAnalyticsConn('offline', 'Error'); showToast({ title: 'Analytics error', description: (err && err.message) || String(err), type: 'error' }); }).getRcaAnalytics(rcaFilters);
+  };
+
+  function onAnalyticsLoaded(resp) {
+    if (!resp || !resp.success) { setAnalyticsConn('offline', 'Error'); showToast({ title: 'Failed', description: (resp && resp.error) || 'Unknown', type: 'error' }); return; }
+    appState.analytics = resp.analytics; setAnalyticsConn('online', 'Ready');
+    const sub = $('rcaAnalyticsSubtitle'); if (sub) sub.textContent = `${fmtNum(resp.total)} RCAs in range · ${appState.analytics.thisWeek || 0} this week · ${appState.analytics.thisMonth || 0} this month`;
+    populateFilterDropdowns(appState.analytics); renderKpis(appState.analytics); renderTrendChart(appState.analytics); renderDefectTrendChart(appState.analytics); renderDefectLineChart(appState.analytics); renderOriginChart(appState.analytics); renderOriginLineChart(appState.analytics); renderTeamChart(appState.analytics); renderTeamLineChart(appState.analytics); renderProductChart(appState.analytics); renderProductLineChart(appState.analytics); renderTypologyChart(appState.analytics); renderTypologyLineChart(appState.analytics); renderTagChart(appState.analytics); renderTagLineChart(appState.analytics); renderCycleChart(appState.analytics); renderAgreementChart(appState.analytics); renderSystemicChart(appState.analytics); renderParetoChart(appState.analytics); renderTopConductors(appState.analytics); renderTopQcReviewers(appState.analytics); renderLlmCharts(appState.analytics); renderPhaseAnalysis(appState.analytics); renderQuestionBreakdown(appState.analytics);
+    loadDrillDown(1);
   }
 
   function populateFilterDropdowns(a) {
-    const fill = (id, obj) => {
-      const sel = document.getElementById(id);
-      if (!sel) return;
-      const cur = sel.value;
-      const entries = Object.entries(obj || {}).sort((x, y) => y[1] - x[1]);
-      sel.innerHTML = '<option value="">All</option>' +
-        entries.map(([k, v]) =>
-          `<option value="${escapeHtml(k)}">${escapeHtml(k)} (${v})</option>`
-        ).join('');
-      sel.value = cur;
-    };
-    fill('rcaFilterConductor',  a.byConductor);
-    fill('rcaFilterQcReviewer', a.byQcReviewer);
-    fill('rcaFilterAnalyst',    a.byAnalyst);
-    fill('rcaFilterTeam',       a.byTeam);
-    fill('rcaFilterAgency',     a.byAgency);
-    fill('rcaFilterProduct',    a.byProduct);
-    fill('rcaFilterCountry',    a.byCountry);
-    fill('rcaFilterAuthority',  a.byAuthority);
-    fill('rcaFilterOrigin',     a.byOrigin);
-    fill('rcaFilterTaskType',   a.byTaskType);
-    fill('rcaFilterErrorSource',a.byErrorSource);
-    fill('rcaFilterTypology',   a.topTypologies);
-    fill('rcaFilterTag',        a.topRiskTags);
+    const fill = (id, obj) => { const sel = $(id); if (!sel) return; const cur = sel.value; const entries = Object.entries(obj || {}).sort((x, y) => y[1] - x[1]); sel.innerHTML = '<option value="">All</option>' + entries.map(([k, v]) => `<option value="${escapeHtml(k)}">${escapeHtml(k)} (${v})</option>`).join(''); sel.value = cur; };
+    fill('rcaFilterConductor', a.byConductor); fill('rcaFilterQcReviewer', a.byQcReviewer); fill('rcaFilterAnalyst', a.byAnalyst); fill('rcaFilterTeam', a.byTeam); fill('rcaFilterAgency', a.byAgency); fill('rcaFilterProduct', a.byProduct); fill('rcaFilterCountry', a.byCountry); fill('rcaFilterAuthority', a.byAuthority); fill('rcaFilterOrigin', a.byOrigin); fill('rcaFilterTaskType', a.byTaskType); fill('rcaFilterTypology', a.topTypologies); fill('rcaFilterTag', a.topRiskTags);
   }
 
   function renderKpis(a) {
-    const ab = a.agreementBreakdown || { yes: 0, no: 0 };
-    const fl = a.flagged || { flagToTL: 0, toBeAppealed: 0 };
-    const ct = a.cycleTime || { avgWorkToQc: 0, avgQcToRca: 0 };
-
+    const ab = a.agreementBreakdown || { yes: 0, no: 0 }; const fl = a.flagged || { flagToTL: 0, toBeAppealed: 0 }; const ct = a.cycleTime || { avgWorkToQc: 0, avgQcToRca: 0 };
     const kpis = [
-      { label: 'Total RCAs',          value: (a.total || 0).toLocaleString(),       sub: 'cases in range', kind: '' },
-      { label: 'Avg Defect Score',    value: (a.avgDefectScore || 0).toFixed(2),    sub: 'higher = more defects', kind: a.avgDefectScore > 3 ? 'critical' : a.avgDefectScore > 1 ? 'warn' : 'success' },
-      { label: 'Agreement Rate',      value: (a.agreementRate || 0) + '%',          sub: `${ab.yes} yes / ${ab.no} no`, kind: a.agreementRate >= 70 ? 'success' : a.agreementRate >= 50 ? 'warn' : 'critical' },
-      { label: 'Critical Rate',       value: (a.criticalRate || 0) + '%',           sub: `${a.criticalCount || 0} critical`, kind: 'critical' },
-      { label: 'Avg Work→QC',         value: (ct.avgWorkToQc || 0).toFixed(1) + 'd', sub: 'analyst lag',  kind: ct.avgWorkToQc > 7 ? 'warn' : '' },
-      { label: 'Avg QC→RCA',          value: (ct.avgQcToRca || 0).toFixed(1) + 'd',  sub: 'feedback lag', kind: ct.avgQcToRca > 7 ? 'warn' : '' },
-      { label: 'Flag Rate',           value: (a.flagRate || 0) + '%',               sub: `${fl.flagToTL} flagged`, kind: 'warn' },
-      { label: 'Appeals',             value: (a.appealRate || 0) + '%',             sub: `${fl.toBeAppealed} appealed`, kind: 'warn' }
+      { label: 'Total RCAs', value: fmtNum(a.total), sub: 'cases in range' },
+      { label: 'Avg Defect Score', value: (a.avgDefectScore || 0).toFixed(2), sub: 'higher = more defects', kind: a.avgDefectScore > 3 ? 'critical' : a.avgDefectScore > 1 ? 'warn' : 'success' },
+      { label: 'Agreement Rate', value: (a.agreementRate || 0) + '%', sub: `${ab.yes} yes / ${ab.no} no`, kind: a.agreementRate >= 70 ? 'success' : a.agreementRate >= 50 ? 'warn' : 'critical' },
+      { label: 'Critical Rate', value: (a.criticalRate || 0) + '%', sub: `${a.criticalCount || 0} critical`, kind: 'critical' },
+      { label: 'Avg Work→QC', value: (ct.avgWorkToQc || 0).toFixed(1) + 'd', sub: 'analyst lag', kind: ct.avgWorkToQc > KPI_WARN_DAYS ? 'warn' : '' },
+      { label: 'Avg QC→RCA', value: (ct.avgQcToRca || 0).toFixed(1) + 'd', sub: 'feedback lag', kind: ct.avgQcToRca > KPI_WARN_DAYS ? 'warn' : '' },
+      { label: 'Flag Rate', value: (a.flagRate || 0) + '%', sub: `${fl.flagToTL} flagged`, kind: 'warn' },
+      { label: 'Appeals', value: (a.appealRate || 0) + '%', sub: `${fl.toBeAppealed} appealed`, kind: 'warn' }
     ];
-    const grid = document.getElementById('rcaKpiGrid');
-    if (!grid) return;
-    grid.innerHTML = kpis.map(k => `
-      <div class="kpi-card ${k.kind ? 'kpi-' + k.kind : ''}" title="${escapeHtml(k.sub)}">
-        <div class="kpi-label">${escapeHtml(k.label)}</div>
-        <div class="kpi-value">${k.value}</div>
-        <div class="kpi-sub">${escapeHtml(k.sub)}</div>
-      </div>
-    `).join('');
+    const grid = $('rcaKpiGrid'); if (grid) grid.innerHTML = kpis.map(k => `<div class="kpi-card ${k.kind ? 'kpi-' + k.kind : ''}" title="${escapeHtml(k.sub)}"><div class="kpi-label">${escapeHtml(k.label)}</div><div class="kpi-value">${k.value}</div><div class="kpi-sub">${escapeHtml(k.sub)}</div></div>`).join('');
   }
 
-  const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-  const destroyChart = (key) => { if (charts[key]) { try { charts[key].destroy(); } catch (e) {} charts[key] = null; } };
+  function chartBaseOpts({ yLabel, noData, noDataMsg } = {}) {
+    return { responsive: true, maintainAspectRatio: false, animation: { duration: 250 }, plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false }, ...(noData && { title: { display: true, text: noDataMsg || 'No data', color: cssVar('--chart-gray') } }) }, scales: { x: { grid: { display: false }, ticks: { color: cssVar('--chart-tick'), maxRotation: 0, autoSkip: true, maxTicksLimit: 12 } }, y: { beginAtZero: true, ticks: { color: cssVar(--chart-tick'), precision: 0 }, grid: { color: cssVar('--chart-grid') }, title: yLabel ? { display: true, text: yLabel, color: cssVar('--chart-tick') } : undefined } } };
+  }
 
   function renderTrendChart(a) {
-    const canvas = document.getElementById('rcaTrendChart');
-    if (!canvas || typeof Chart === 'undefined') return;
-    destroyChart('trend');
+    const canvas = $('rcaTrendChart'); if (!canvas || typeof Chart === 'undefined') return; destroyChart('trend');
     let data, label;
-    if (rcaTrendMode === 'weekly')        { data = a.trendWeekly || [];  label = 'RCAs per week'; }
-    else if (rcaTrendMode === 'monthly')  { data = a.trendMonthly || []; label = 'RCAs per month'; }
-    else                                  { data = a.trendDaily || [];   label = 'RCAs per day'; }
-
-    const labels = data.map(d => rcaTrendMode === 'daily' ? d.date : (d.week || d.month));
-    const counts = data.map(d => d.count);
-
-    charts.trend = new Chart(canvas, {
-      type: 'line',
-      data: { labels, datasets: [{
-        label, data: counts,
-        borderColor: cssVar('--chart-line'),
-        backgroundColor: cssVar('--chart-fill'),
-        fill: true, tension: 0.35,
-        pointBackgroundColor: cssVar('--chart-line'),
-        pointRadius: counts.length > 60 ? 0 : 3,
-        pointHoverRadius: 5, borderWidth: 2
-      }]},
-      options: chartBaseOpts({ noData: counts.length === 0, noDataMsg: 'No data in selected range' })
-    });
-  }
-
-  function renderCycleChart(a) {
-    const canvas = document.getElementById('rcaCycleChart');
-    if (!canvas || typeof Chart === 'undefined') return;
-    destroyChart('cycle');
-    const data = a.cycleTimeTrendWeekly || [];
-    const labels = data.map(d => d.week);
-    const w2q    = data.map(d => d.avgWorkToQc);
-    const q2r    = data.map(d => d.avgQcToRca);
-
-    charts.cycle = new Chart(canvas, {
-      type: 'line',
-      data: { labels, datasets: [
-        { label: 'Work→QC', data: w2q, borderColor: cssVar('--chart-blue'),   backgroundColor: 'transparent', tension: 0.3, pointRadius: 3, borderWidth: 2 },
-        { label: 'QC→RCA',  data: q2r, borderColor: cssVar('--chart-orange'), backgroundColor: 'transparent', tension: 0.3, pointRadius: 3, borderWidth: 2 }
-      ]},
-      options: chartBaseOpts({ yLabel: 'days', noData: data.length === 0 })
-    });
-  }
-
-  function renderPhaseFailure(a) {
-    const order = [
-      { key: 'p2Baseline',   label: 'P2 Baseline',     tip: 'Did analyst pass Baseline Checks?' },
-      { key: 'p2Osint',      label: 'P2 OSINT',        tip: 'Did analyst pass OSINT Checks?' },
-      { key: 'p3Baseline',   label: 'P3 Txn Baseline', tip: 'Did analyst pass Transaction Baseline?' },
-      { key: 'p3Module',     label: 'P3 Module',       tip: 'Did analyst pass module checks?' },
-      { key: 'p4ShortFull',  label: 'P4 Short/Full',   tip: 'Correct Full vs Short identification?' },
-      { key: 'p4CorrectAll', label: 'P4 AU Outcomes',  tip: 'Correct outcome on all associates?' },
-      { key: 'p5Decision',   label: 'P5 Decision',     tip: 'Correct overall decision?' }
-    ];
-    const ph = a.phaseFailure || {};
-    const html = order.map(o => {
-      const v = ph[o.key] || { pass: 0, fail: 0, total: 0, failRate: 0 };
-      const passPct = v.total ? (v.pass / v.total) * 100 : 0;
-      const failPct = v.total ? (v.fail / v.total) * 100 : 0;
-      const rateCls = v.failRate > 30 ? 'fail-high' : v.failRate > 15 ? 'fail-mid' : 'fail-low';
-      return `<div class="phase-bar-row" title="${escapeHtml(o.tip)} · ${v.pass} pass, ${v.fail} fail">
-        <div class="phase-bar-label">${escapeHtml(o.label)}</div>
-        <div class="phase-bar-track">
-          <div class="phase-bar-pass" style="width:${passPct}%"></div>
-          <div class="phase-bar-fail" style="width:${failPct}%"></div>
-        </div>
-        <div class="phase-bar-rate ${rateCls}">${v.failRate}%</div>
-      </div>`;
-    }).join('');
-    const el = document.getElementById('rcaPhaseFailure');
-    if (el) el.innerHTML = html;
-  }
-
-  function renderTypologies(a) { setHTML('rcaTopTypologies', _barList(a.topTypologies, null, 10)); }
-  function renderRiskTags(a)   { setHTML('rcaTopRiskTags',   _barList(a.topRiskTags,   null, 10)); }
-  function setHTML(id, html) { const el = document.getElementById(id); if (el) el.innerHTML = html; }
-
-  function renderSystemicChart(a) {
-    const canvas = document.getElementById('rcaSystemicChart');
-    const legend = document.getElementById('rcaSystemicLegend');
-    if (!canvas || typeof Chart === 'undefined') return;
-    destroyChart('systemic');
-
-    const svh = a.systemicVsHuman || {};
-    const labels = ['Human Only', 'System Only', 'Both', 'Neither', 'Unknown'];
-    const keys   = ['humanOnly', 'systemOnly', 'both', 'neither', 'unknown'];
-    const data   = keys.map(k => svh[k] || 0);
-    const colors = [cssVar('--chart-orange'), cssVar('--chart-blue'), cssVar('--chart-red'), cssVar('--chart-gray'), cssVar('--chart-gray')];
-
-    charts.systemic = new Chart(canvas, {
-      type: 'doughnut',
-      data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 2, borderColor: cssVar('--bg-card') || '#fff' }]},
-      options: {
-        responsive: true, maintainAspectRatio: false, cutout: '60%',
-        plugins: { legend: { display: false }, tooltip: { enabled: true } }
-      }
-    });
-
-    if (!legend) return;
-    const total = data.reduce((acc, b) => acc + b, 0);
-    legend.innerHTML = labels.map((l, i) => `
-      <div class="donut-legend-row">
-        <div class="donut-legend-dot" style="background:${colors[i]}"></div>
-        <div class="donut-legend-name">${l}</div>
-        <div class="donut-legend-val">${data[i].toLocaleString()} <span style="color:var(--text-muted); font-weight:400;">(${total ? Math.round(data[i] / total * 100) : 0}%)</span></div>
-      </div>
-    `).join('');
-  }
-
-  function renderAgreementChart(a) {
-    const canvas = document.getElementById('rcaAgreementChart');
-    if (!canvas || typeof Chart === 'undefined') return;
-    destroyChart('agreement');
-
-    const ab = a.agreementBreakdown || { yes: 0, no: 0, other: 0 };
-    charts.agreement = new Chart(canvas, {
-      type: 'doughnut',
-      data: {
-        labels: ['Yes (Agree)', 'No (Disagree)', 'Other'],
-        datasets: [{
-          data: [ab.yes, ab.no, ab.other],
-          backgroundColor: [cssVar('--chart-green'), cssVar('--chart-red'), cssVar('--chart-gray')],
-          borderWidth: 2, borderColor: cssVar('--bg-card') || '#fff'
-        }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false, cutout: '65%',
-        plugins: {
-          legend: { position: 'right', labels: { color: cssVar('--chart-tick'), font: { size: 11 } } },
-          tooltip: {
-            callbacks: {
-              label: (ctx) => {
-                const v = ctx.parsed;
-                const t = ctx.dataset.data.reduce((a, b) => a + b, 0);
-                return `${ctx.label}: ${v.toLocaleString()} (${t ? Math.round(v / t * 100) : 0}%)`;
-              }
-            }
-          }
-        }
-      }
-    });
-  }
-
-  function renderBreakdowns(a) {
-    setHTML('rcaDefectBreakdown',  _barList(a.byDefect, ['Critical', 'None', 'Unknown']));
-    setHTML('rcaTeamBreakdown',    _barList(a.byTeam));
-    setHTML('rcaTopConductors',    _leaderboard(a.topConductors));
-    setHTML('rcaTopQcReviewers',   _leaderboard(a.topQcReviewers));
+    if (appState.trendMode === 'weekly') { data = a.trendWeekly || []; label = 'RCAs per week'; }
+    else if (appState.trendMode === 'monthly') { data = a.trendMonthly || []; label = 'RCAs per month'; }
+    else { data = a.trendDaily || []; label = 'RCAs per day'; }
+    charts.trend = new Chart(canvas, { type: 'line', data: { labels: data.map(d => d.date || d.week || d.month), datasets: [{ label, data: data.map(d => d.count), borderColor: cssVar('--chart-line'), backgroundColor: cssVar('--chart-fill'), fill: true, tension: 0.35, pointBackgroundColor: cssVar('--chart-line'), pointRadius: data.length > 60 ? 0 : 3, pointHoverRadius: 5, borderWidth: 2 }]}, options: chartBaseOpts({ noData: data.length === 0 }) });
   }
 
   function renderDefectTrendChart(a) {
-    const canvas = document.getElementById('rcaDefectTrendChart');
-    if (!canvas || typeof Chart === 'undefined') return;
-    destroyChart('defectTrend');
-    const data = a.trendDailyByDefect || [];
-    const labels = data.map(d => d.date);
-    const mk = (key, color) => ({
-      label: key, data: data.map(d => d[key] || 0),
-      backgroundColor: color, borderColor: color, borderWidth: 1, stack: 'a'
-    });
+    const canvas = $('rcaDefectTrendChart'); if (!canvas || typeof Chart === 'undefined') return; destroyChart('defectTrend');
+    const data = a.trendDailyByDefect || []; const labels = data.map(d => d.date);
+    const mk = (key, color) => ({ label: key, data: data.map(d => d[key] || 0), backgroundColor: color, borderColor: color, borderWidth: 1, stack: 'a' });
+    charts.defectTrend = new Chart(canvas, { type: 'bar', data: { labels, datasets: [ mk('Critical', cssVar('--chart-red') + 'cc'), mk('Major', cssVar('--chart-orange') + 'cc'), mk('Minor', cssVar('--chart-blue') + 'cc'), mk('None', cssVar('--chart-green') + 'cc') ]}, options: { ...chartBaseOpts(), interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: true, labels: { color: cssVar('--chart-tick'), font: { size: 10 } } } }, scales: { x: { stacked: true, ticks: { color: cssVar('--chart-tick') } }, y: { stacked: true, beginAtZero: true, ticks: { color: cssVar('--chart-tick') } } } } });
+  }
+  function renderDefectLineChart(a) {
+    const canvas = $('rcaDefectLineChart'); if (!canvas || typeof Chart === 'undefined') return; destroyChart('defectLine');
+    const data = a.trendDailyByDefect || []; const labels = data.map(d => d.date);
+    const mk = (key, color) => ({ label: key, data: data.map(d => d[key] || 0), borderColor: color, backgroundColor: 'transparent', tension: 0.3, borderWidth: 2 });
+    charts.defectLine = new Chart(canvas, { type: 'line', data: { labels, datasets: [ mk('Critical', cssVar('--chart-red')), mk('Major', cssVar('--chart-orange')), mk('Minor', cssVar('--chart-blue')) ]}, options: { ...chartBaseOpts({ noData: data.length === 0 }), plugins: { legend: { display: true, labels: { color: cssVar('--chart-tick'), font: { size: 10 } } } } } });
+  }
 
-    charts.defectTrend = new Chart(canvas, {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [
-          mk('Critical', cssVar('--chart-red') + 'cc'),
-          mk('Major',    cssVar('--chart-orange') + 'cc'),
-          mk('Minor',    cssVar('--chart-blue') + 'cc'),
-          mk('None',     cssVar('--chart-green') + 'cc')
-        ]
-      },
-      options: {
-        ...chartBaseOpts(),
-        interaction: { mode: 'index', intersect: false },
-        plugins: { legend: { display: true, labels: { color: cssVar('--chart-tick'), font: { size: 11 } } } },
-        scales: {
-          x: { stacked: true, grid: { display: false }, ticks: { color: cssVar('--chart-tick') } },
-          y: { stacked: true, beginAtZero: true, ticks: { color: cssVar('--chart-tick') }, grid: { color: cssVar('--chart-grid') } }
-        },
-        onClick: (e, el) => {
-          if (!el.length || !data[el[0].index]) return;
-          const dt = data[el[0].index].date;
-          document.getElementById('rcaFilterFrom').value = dt;
-          document.getElementById('rcaFilterTo').value = dt;
-          document.getElementById('rcaFilterDateField').value = 'timestamp';
-          loadRcaAnalytics();
-        }
-      }
-    });
+  function renderBarAndLine(barId, lineId, barDataObj, lineDataArr, title) {
+    const barCanvas = $(barId), lineCanvas = $(lineId); 
+    if (!barCanvas || !lineCanvas || typeof Chart === 'undefined') return;
+    destroyChart(barId); destroyChart(lineId);
+    
+    barDataObj = barDataObj || {};
+    lineDataArr = lineDataArr || [];
+    
+    const entries = Object.entries(barDataObj).sort((a,b) => b[1]-a[1]).slice(0, 5);
+    const labels = entries.map(([k]) => k.length > 26 ? k.slice(0, 24) + '…' : k); const data = entries.map(([, v]) => v);
+    charts[barId] = new Chart(barCanvas, { type: 'bar', data: { labels, datasets: [{ data, backgroundColor: cssVar('--accent'), borderRadius: 4 }]}, options: { ...chartBaseOpts({ noData: entries.length === 0 }), indexAxis: 'y' } });
+
+    const lineLabels = lineDataArr.map(d => d.date);
+    const colors = [cssVar('--chart-red'), cssVar('--chart-blue'), cssVar('--chart-green'), cssVar('--chart-orange'), cssVar('--chart-purple')];
+    const datasets = labels.map((l, i) => ({ label: l, data: lineDataArr.map(d => d[l] || 0), borderColor: colors[i % 5], backgroundColor: 'transparent', tension: 0.3, borderWidth: 2 }));
+    charts[lineId] = new Chart(lineCanvas, { type: 'line', data: { labels: lineLabels, datasets }, options: { ...chartBaseOpts({ noData: lineDataArr.length === 0 }), plugins: { legend: { display: true, labels: { color: cssVar('--chart-tick'), font: { size: 10 } } } } } });
+  }
+
+  function renderOriginChart(a)  { renderBarAndLine('rcaOriginChart', 'rcaOriginLineChart', a.byOrigin, a.trendDailyByOrigin, 'UAR Origin'); }
+  function renderTeamChart(a)    { renderBarAndLine('rcaTeamChart', 'rcaTeamLineChart', a.byTeam, a.trendDailyByTeam, 'Team'); }
+  function renderProductChart(a) { renderBarAndLine('rcaProductChart', 'rcaProductLineChart', a.byProduct, a.trendDailyByProduct, 'Product'); }
+  function renderTypologyChart(a){ renderBarAndLine('rcaTypologyChart', 'rcaTypologyLineChart', a.topTypologies, a.trendDailyByTypology, 'Typology'); }
+  function renderTagChart(a)    { renderBarAndLine('rcaTagChart', 'rcaTagLineChart', a.topRiskTags, a.trendDailyByTag, 'Risk Tag'); }
+
+  function renderCycleChart(a) {
+    const canvas = $('rcaCycleChart'); if (!canvas || typeof Chart === 'undefined') return; destroyChart('cycle');
+    const data = a.cycleTimeTrendWeekly || [];
+    charts.cycle = new Chart(canvas, { type: 'line', data: { labels: data.map(d => d.week), datasets: [
+      { label: 'Work→QC', data: data.map(d => d.avgWorkToQc), borderColor: cssVar('--chart-blue'), backgroundColor: 'transparent', tension: 0.3, pointRadius: 3, borderWidth: 2 },
+      { label: 'QC→RCA', data: data.map(d => d.avgQcToRca), borderColor: cssVar('--chart-orange'), backgroundColor: 'transparent', tension: 0.3, pointRadius: 3, borderWidth: 2 }
+    ]}, options: { ...chartBaseOpts({ yLabel: 'days', noData: data.length === 0 }), plugins: { legend: { display: true, labels: { color: cssVar('--chart-tick'), font: { size: 10 } } } } } });
+  }
+
+  function renderAgreementChart(a) {
+    const canvas = $('rcaAgreementChart'); if (!canvas || typeof Chart === 'undefined') return; destroyChart('agreement');
+    const ab = a.agreementBreakdown || { yes: 0, no: 0, other: 0 };
+    const total = ab.yes + ab.no + ab.other;
+    const pData = total > 0 ? [Math.round(ab.yes/total*100), Math.round(ab.no/total*100), Math.round(ab.other/total*100)] : [0,0,0];
+    charts.agreement = new Chart(canvas, { type: 'doughnut', data: { labels: ['Agreed', 'Disagreed', 'Other'], datasets: [{ data: pData, backgroundColor: [cssVar('--chart-green'), cssVar('--chart-red'), cssVar('--chart-gray')], borderWidth: 2, borderColor: cssVar('--bg-card') || '#fff' }]}, options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { position: 'right', labels: { color: cssVar('--chart-tick'), font: { size: 11 } } }, tooltip: { callbacks: { label: function(ctx) { return ctx.label + ': ' + ctx.raw + '%'; } } } } } });
+  }
+
+  function renderSystemicChart(a) {
+    const canvas = $('rcaSystemicChart'); if (!canvas || typeof Chart === 'undefined') return; destroyChart('systemic');
+    const svh = a.systemicVsHuman || {};
+    const labels = ['Human Only', 'System Only', 'Both', 'Neither', 'Unknown'];
+    const keys = ['humanOnly', 'systemOnly', 'both', 'neither', 'unknown'];
+    const data = keys.map(k => svh[k] || 0);
+    const total = data.reduce((acc, b) => acc + b, 0);
+    const pData = total > 0 ? data.map(d => Math.round(d/total*100)) : [0,0,0,0,0];
+    charts.systemic = new Chart(canvas, { type: 'doughnut', data: { labels, datasets: [{ data: pData, backgroundColor: [cssVar('--chart-orange'), cssVar('--chart-blue'), cssVar('--chart-red'), cssVar('--chart-gray'), cssVar('--chart-gray')], borderWidth: 2, borderColor: cssVar('--bg-card') || '#fff' }]}, options: { responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { position: 'right', labels: { color: cssVar('--chart-tick'), font: { size: 11 } } }, tooltip: { callbacks: { label: function(ctx) { return ctx.label + ': ' + ctx.raw + '%'; } } } } } });
   }
 
   function renderParetoChart(a) {
-    const canvas = document.getElementById('rcaParetoChart');
-    if (!canvas || typeof Chart === 'undefined') return;
-    destroyChart('pareto');
+    const canvas = $('rcaParetoChart'); if (!canvas || typeof Chart === 'undefined') return; destroyChart('pareto');
     const entries = (a.paretoFailures || []).slice(0, 12);
-    const labels = entries.map(([k]) => k.length > 28 ? k.slice(0, 26) + '…' : k);
+    const labels = entries.map(([k]) => k.length > 26 ? k.slice(0, 24) + '…' : k);
     const counts = entries.map(([, v]) => v);
     const total = counts.reduce((acc, b) => acc + b, 0) || 1;
     let cum = 0;
     const cumPct = counts.map(v => { cum += v; return +(cum / total * 100).toFixed(1); });
-
-    charts.pareto = new Chart(canvas, {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [
-          { label: 'Count', data: counts, backgroundColor: cssVar('--accent'), order: 2, yAxisID: 'y', borderRadius: 4 },
-          { label: 'Cumulative %', data: cumPct, type: 'line', borderColor: cssVar('--chart-orange'), backgroundColor: 'transparent', borderWidth: 2, pointRadius: 3, order: 1, yAxisID: 'y1' }
-        ]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: true, labels: { color: cssVar('--chart-tick'), font: { size: 11 } } } },
-        scales: {
-          x: { ticks: { color: cssVar('--chart-tick'), maxRotation: 45, minRotation: 0, autoSkip: false, font: { size: 10 } }, grid: { display: false } },
-          y: { beginAtZero: true, position: 'left',  ticks: { color: cssVar('--chart-tick') }, grid: { color: cssVar('--chart-grid') } },
-          y1:{ beginAtZero: true, max: 100, position: 'right', ticks: { color: cssVar('--chart-orange'), callback: v => v + '%' }, grid: { display: false } }
-        },
-        onClick: (e, el) => {
-          if (!el.length || !entries[el[0].index]) return;
-          document.getElementById('rcaFilterSearch').value = entries[el[0].index][0];
-          loadRcaAnalytics();
-        }
-      }
-    });
+    charts.pareto = new Chart(canvas, { type: 'bar', data: { labels, datasets: [
+      { label: 'Count', data: counts, backgroundColor: cssVar('--accent'), order: 2, yAxisID: 'y', borderRadius: 4 },
+      { label: 'Cumulative %', data: cumPct, type: 'line', borderColor: cssVar('--chart-orange'), backgroundColor: 'transparent', borderWidth: 2, pointRadius: 3, order: 1, yAxisID: 'y1' }
+    ]}, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, labels: { color: cssVar('--chart-tick'), font: { size: 10 } } } }, scales: {
+      x: { ticks: { color: cssVar('--chart-tick'), maxRotation: 45, font: { size: 10 } } },
+      y: { beginAtZero: true, position: 'left', ticks: { color: cssVar('--chart-tick') } },
+      y1: { beginAtZero: true, max: 100, position: 'right', ticks: { color: cssVar('--chart-orange'), callback: v => v + '%' }, grid: { display: false } }
+    }, onClick: (e, el) => { if (!el.length) return; $('rcaFilterSearch').value = entries[el[0].index][0]; loadRcaAnalytics(); } } });
   }
 
-  function renderScatterChart(a) {
-    const canvas = document.getElementById('rcaScatterChart');
-    if (!canvas || typeof Chart === 'undefined') return;
-    destroyChart('scatter');
-    const data = (a.analystMatrix || []).filter(x => x.count >= 3);
-    charts.scatter = new Chart(canvas, {
-      type: 'bubble',
-      data: {
-        datasets: [{
-          label: 'Analysts',
-          data: data.map(d => ({
-            x: d.count,
-            y: d.avgScore,
-            r: Math.min(Math.max(d.avgCycle * 2, 4), 20),
-            _name: d.name
-          })),
-          backgroundColor: cssVar('--chart-blue') + '80',
-          borderColor: cssVar('--chart-blue')
-        }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: { callbacks: { label: (ctx) => {
-            const raw = ctx.raw;
-            return `${raw._name}: ${raw.x} cases, score ${raw.y}, ~${(raw.r / 2).toFixed(0)}d cycle`;
-          } } }
-        },
-        scales: {
-          x: { title: { display: true, text: 'Cases Reviewed', color: cssVar('--chart-tick') }, ticks: { color: cssVar('--chart-tick') }, grid: { color: cssVar('--chart-grid') } },
-          y: { title: { display: true, text: 'Avg Defect Score', color: cssVar('--chart-tick') }, ticks: { color: cssVar('--chart-tick') }, grid: { color: cssVar('--chart-grid') }, beginAtZero: true }
-        },
-        onClick: (e, el) => {
-          if (!el.length || !data[el[0].index]) return;
-          document.getElementById('rcaFilterAnalyst').value = data[el[0].index].name;
-          loadRcaAnalytics();
-        }
-      }
-    });
+  function _leaderboard(obj) {
+    const entries = Object.entries(obj || {}).sort((a, b) => b[1] - a[1]).slice(0, 10);
+    if (!entries.length) return '<div class="analytics-empty">No data</div>';
+    const medals = ['🥇', '🥈', '🥉'];
+    return entries.map(([name, count], i) => {
+      return `<div class="lb-row" data-name="${escapeHtml(name)}" style="display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:6px; cursor:pointer; font-size:12px;">
+        <div class="lb-rank" style="width:24px; text-align:center; font-weight:700;">${i < 3 ? medals[i] : (i + 1)}</div>
+        <div class="lb-name" style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escapeHtml(name)}">${escapeHtml(name)}</div>
+        <div class="lb-count" style="font-weight:700;">${count}</div>
+      </div>`;
+    }).join('');
+  }
+  function renderTopConductors(a)  { setHTML('rcaTopConductors',  _leaderboard(a.topConductors)); }
+  function renderTopQcReviewers(a) { setHTML('rcaTopQcReviewers', _leaderboard(a.topQcReviewers)); }
+  function setHTML(id, html) { const el = $(id); if (el) el.innerHTML = html; }
+
+  function renderLlmCharts(a) {
+    const barCanvas = $('rcaLlmBarChart'); if (!barCanvas || typeof Chart === 'undefined') return; destroyChart('llmBar');
+    const llmData = a.trendDailyLlm || [];
+    const labels = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6'];
+    const totals = labels.map((l, i) => llmData.reduce((acc, d) => acc + (d['p'+(i+1)] || 0), 0));
+    charts.llmBar = new Chart(barCanvas, { type: 'bar', data: { labels, datasets: [{ label: 'Failures', data: totals, backgroundColor: cssVar('--chart-purple'), borderRadius: 4 }]}, options: chartBaseOpts({ yLabel: 'Failures', noData: llmData.length === 0 }) });
+
+    const lineCanvas = $('rcaLlmLineChart'); if (!lineCanvas) return; destroyChart('llmLine');
+    const lineLabels = llmData.map(d => d.date);
+    const colors = [cssVar('--chart-red'), cssVar('--chart-blue'), cssVar('--chart-green'), cssVar('--chart-orange'), cssVar('--chart-purple'), cssVar('--chart-teal')];
+    const datasets = labels.map((l, i) => ({ label: l, data: llmData.map(d => d['p'+(i+1)] || 0), borderColor: colors[i % 6], backgroundColor: 'transparent', tension: 0.3, borderWidth: 2 }));
+    charts.llmLine = new Chart(lineCanvas, { type: 'line', data: { labels: lineLabels, datasets }, options: { ...chartBaseOpts({ noData: llmData.length === 0 }), plugins: { legend: { display: true, labels: { color: cssVar('--chart-tick'), font: { size: 10 } } } } } });
   }
 
-  function renderCycleHistogram(a) {
-    const canvas = document.getElementById('rcaCycleHistogram');
-    if (!canvas || typeof Chart === 'undefined') return;
-    destroyChart('cycleHist');
-    const allLabels = new Set([...(a.cycleHistogramW2Q || []).map(x => x.label), ...(a.cycleHistogramQ2R || []).map(x => x.label)]);
-    const labels = Array.from(allLabels).sort((x, y) => parseInt(x) - parseInt(y));
-    const toMap = (arr) => Object.fromEntries((arr || []).map(x => [x.label, x.count]));
-    const m1 = toMap(a.cycleHistogramW2Q);
-    const m2 = toMap(a.cycleHistogramQ2R);
-    charts.cycleHist = new Chart(canvas, {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [
-          { label: 'Work→QC', data: labels.map(l => m1[l] || 0), backgroundColor: cssVar('--chart-blue') + 'aa', borderRadius: 4 },
-          { label: 'QC→RCA', data: labels.map(l => m2[l] || 0), backgroundColor: cssVar('--chart-orange') + 'aa', borderRadius: 4 }
-        ]
-      },
-      options: {
-        ...chartBaseOpts(),
-        plugins: { legend: { display: true, labels: { color: cssVar('--chart-tick'), font: { size: 11 } } } },
-        scales: {
-          x: { stacked: false, ticks: { color: cssVar('--chart-tick') }, grid: { display: false } },
-          y: { beginAtZero: true, ticks: { color: cssVar('--chart-tick') }, grid: { color: cssVar('--chart-grid') } }
-        }
-      }
-    });
-  }
+  function renderPhaseAnalysis(a) {
+    const container = $('phaseGrid'); if (!container) return;
+    const phaseStats = a.phaseStats || {};
+    const html = PHASE_CONFIG.map(phase => {
+      const phaseData = phaseStats[phase.num] || { pass: 0, fail: 0, total: 0, failRate: 0 };
+      const isOpen = appState.expandedPhases.has(phase.num);
+      const rateCls = phaseData.failRate > 30 ? 'rate-bad' : phaseData.failRate > 15 ? 'rate-warn' : 'rate-good';
+      const questionsHtml = phase.questions.map(q => {
+        const qStat = phaseData.questions && phaseData.questions[q.key] || { pass: 0, fail: 0, total: 0, failRate: 0, topReason: null };
+        if (qStat.total === 0) return '';
+        const safeTitle = JSON.stringify(`P${phase.num} · ${q.label}`);
+        const safeSource = JSON.stringify(`P${phase.num} · ${q.label}`);
+        return `<div class="phase-question">
+          <div class="phase-q-label">${escapeHtml(q.label)}</div>
+          <div class="phase-q-stats">
+            <span class="pass-pill">✓ ${fmtNum(qStat.pass)}</span>
+            <span class="fail-pill">✗ ${fmtNum(qStat.fail)}</span>
+            <span style="color:var(--text-muted); font-size:10px;">${qStat.failRate}% fail</span>
+          </div>
+          ${qStat.topReason ? `<div class="phase-q-topfail">Top: ${escapeHtml(qStat.topReason.reason)} (${qStat.topReason.count})</div>` : ''}
+          <div class="phase-q-actions">
+            <button onclick="window.drillToQuestion && window.drillToQuestion('${q.key}')">🔍 Drill</button>
+            <button onclick='window.flagRootCause && window.flagRootCause({title: ${safeTitle}, source: ${safeSource}, category: "Process", priority: "${qStat.failRate > 30 ? 'High' : 'Medium'}"})'>🚩 Flag</button>
+          </div>
+        </div>`;
+      }).join('');
 
-  function renderPhaseHeatmap(a) {
-    const container = document.getElementById('rcaPhaseHeatmap');
-    if (!container) return;
-    const data = a.phaseHeatmap || [];
-    if (!data.length) { container.innerHTML = '<div class="analytics-empty">No data</div>'; return; }
-    const phases = [['p2','P2 Base'], ['p3','P3 Txn'], ['p4','P4 AU'], ['p5','P5 Dec'], ['p6','P6 Post'], ['p7','P7 Doc']];
-    let html = '<div class="heatmap-grid">';
-    html += `<div style="display:grid; grid-template-columns: 72px repeat(${data.length}, minmax(0,1fr)); gap:3px; font-weight:700; color:var(--text-secondary);">`;
-    html += '<div></div>' + data.map(d => `<div style="text-align:center; font-size:10px;">${d.month}</div>`).join('') + '</div>';
-    phases.forEach(([key, name]) => {
-      html += `<div style="display:grid; grid-template-columns: 72px repeat(${data.length}, minmax(0,1fr)); gap:3px; align-items:center;">`;
-      html += `<div style="font-weight:600; font-size:11px;">${name}</div>`;
-      data.forEach(d => {
-        const v = d[key] || 0;
-        const alpha = Math.min(Math.max(v / 40, 0.05), 1);
-        const bg = `rgba(245, 54, 92, ${alpha})`;
-        const fg = v > 20 ? '#fff' : 'var(--text-primary)';
-        html += `<div class="heatmap-cell" style="background:${bg}; color:${fg};" onclick="filterByMonth('${d.month}')" title="${v}% fail">${v}%</div>`;
-      });
-      html += '</div>';
-    });
-    html += '</div>';
+      const safePhaseTitle = JSON.stringify(`P${phase.num} · ${phase.title} systemic issue`);
+      const safePhaseSource = JSON.stringify(`P${phase.num} · ${phase.title}`);
+      return `<div class="phase-card">
+        <div class="phase-card-header" onclick="window.togglePhase(${phase.num})">
+          <div class="phase-num">${phase.num}</div>
+          <div class="phase-title">${escapeHtml(phase.title)}</div>
+          <div class="phase-rate ${rateCls}">${phaseData.failRate}% fail</div>
+        </div>
+        <div class="phase-body" id="phaseBody${phase.num}" style="display:${isOpen ? 'block' : 'none'};">
+          ${questionsHtml || '<div class="analytics-empty">No data</div>'}
+          <div style="margin-top:10px; padding-top:8px; border-top:1px solid var(--border); font-size:11px; color:var(--text-secondary);">
+            ${fmtNum(phaseData.pass)} pass · ${fmtNum(phaseData.fail)} fail · ${fmtNum(phaseData.total)} total
+            <button style="float:right; background:var(--danger-soft); color:var(--danger); border:none; padding:2px 8px; border-radius:4px; cursor:pointer; font-size:10px; font-weight:600;" onclick='window.flagRootCause && window.flagRootCause({title: ${safePhaseTitle}, source: ${safePhaseSource}, category: "Process"})'>🚩 Flag all</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
     container.innerHTML = html;
   }
 
-  function filterByMonth(month) {
-    const [y, m] = month.split('-');
-    const lastDay = new Date(y, m, 0).getDate();
-    document.getElementById('rcaFilterFrom').value = month + '-01';
-    document.getElementById('rcaFilterTo').value = month + '-' + String(lastDay).padStart(2, '0');
-    document.getElementById('rcaFilterDateField').value = 'timestamp';
-    loadRcaAnalytics();
+  window.togglePhase = function(num) {
+    if (appState.expandedPhases.has(num)) appState.expandedPhases.delete(num);
+    else appState.expandedPhases.add(num);
+    const body = $('phaseBody' + num);
+    if (body) body.style.display = appState.expandedPhases.has(num) ? 'block' : 'none';
+  };
+  window.expandAllPhases = function(expand) {
+    appState.expandedPhases.clear();
+    if (expand) PHASE_CONFIG.forEach(p => appState.expandedPhases.add(p.num));
+    if (appState.analytics) renderPhaseAnalysis(appState.analytics);
+  };
+
+  window.drillToQuestion = function(questionKey) {
+    $('rcaFilterSearch').value = ''; 
+    $('rcaFilterPhase').value = '';
+    if (appState.expandedPhases.size === 0) expandAllPhases(true);
+    setTimeout(() => {
+      const el = document.querySelector(`[data-qkey="${questionKey}"]`);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 200);
+  };
+
+  function renderQuestionBreakdown(a) {
+    const body = $('questionBody'); if (!body) return;
+    const phaseStats = a.phaseStats || {};
+    const rows = [];
+    PHASE_CONFIG.forEach(phase => {
+      const pData = phaseStats[phase.num] || { questions: {} };
+      phase.questions.forEach(q => {
+        const s = (pData.questions && pData.questions[q.key]) || { pass: 0, fail: 0, total: 0, failRate: 0 };
+        if (s.total === 0) return;
+        rows.push({ phase, q, s });
+      });
+    });
+    const filter = appState.questionFilter.toLowerCase();
+    const filtered = filter ? rows.filter(r => r.q.label.toLowerCase().includes(filter) || `p${r.phase.num}`.includes(filter)) : rows;
+    if (!filtered.length) {
+      body.innerHTML = '<tr><td colspan="7" class="analytics-empty">No data in current filter</td></tr>';
+      return;
+    }
+    body.innerHTML = filtered.map(r => {
+      const s = r.s;
+      const rate = s.failRate;
+      const rateColor = rate > 30 ? 'var(--danger)' : rate > 15 ? 'var(--warning)' : 'var(--success)';
+      const topFail = s.topReason ? s.topReason.reason : '—';
+      const safeTitle = JSON.stringify(`P${r.phase.num} · ${r.q.label}`);
+      const safeSource = JSON.stringify(`P${r.phase.num} · ${r.q.label}`);
+      return `<tr data-qkey="${r.q.key}" onclick='window.flagRootCause && window.flagRootCause({title: ${safeTitle}, source: ${safeSource}, category: "Process"})'>
+        <td class="q-phase">P${r.phase.num}</td>
+        <td class="q-label">${escapeHtml(r.q.label)}</td>
+        <td class="q-num" style="color:var(--success);">${fmtNum(s.pass)}</td>
+        <td class="q-num" style="color:var(--danger);">${fmtNum(s.fail)}</td>
+        <td class="q-rate" style="color:${rateColor};">${rate}%</td>
+        <td class="q-topfail" title="${escapeHtml(topFail)}">${escapeHtml(topFail)}</td>
+        <td><button class="btn btn-ghost btn-sm" onclick='event.stopPropagation(); window.flagRootCause && window.flagRootCause({title: ${safeTitle}, source: ${safeSource}, category: "Process"}); return false;'>🚩</button></td>
+      </tr>`;
+    }).join('');
   }
 
-  function loadRcaTable(page) {
-    rcaTablePage = page || 1;
-    rcaFilters = getRcaFiltersFromUi();
-    setConn('busy', 'Loading table…');
+  window.loadDrillDown = function(page) {
+    appState.drillDown.page = page;
+    rcaFilters = gatherFilters();
     google.script.run
-      .withSuccessHandler(onRcaTableLoaded)
+      .withSuccessHandler(onDrillDownLoaded)
       .withFailureHandler(err => showToast({ title: 'Table error', description: (err && err.message) || String(err), type: 'error' }))
-      .getRcaResultsTable(rcaFilters, rcaTablePage, RCA_PAGE_SIZE);
+      .getRcaResultsTable(rcaFilters, page, PAGE_SIZE);
+  };
+
+  function onDrillDownLoaded(resp) {
+    if (!resp || !resp.success) {
+      showToast({ title: 'Failed', description: (resp && resp.error) || 'Unknown', type: 'error' });
+      return;
+    }
+    appState.drillDown.rows = resp.rows || [];
+    appState.drillDown.total = resp.total || 0;
+    appState.drillDown.page = resp.page;
+    appState.drillDown.pageSize = resp.pageSize;
+    renderDrillDownTable();
   }
 
-  function onRcaTableLoaded(resp) {
-    setConn('online', 'Ready');
-    if (!resp || !resp.success) {
-      showToast({ title: 'Failed', description: (resp && resp.error) || 'Unknown error', type: 'error' });
+  function renderDrillDownTable() {
+    const tbody = $('rcaTableBody'); if (!tbody) return;
+    $('rcaTableCount').textContent = fmtNum(appState.drillDown.total);
+    $('selectedCount').textContent = appState.selectedRows.size;
+
+    if (!appState.drillDown.rows.length) {
+      tbody.innerHTML = '<tr><td colspan="13" class="analytics-empty">No rows match the current filters</td></tr>';
+      $('rcaTablePaginationInfo').textContent = '0 rows';
+      $('rcaPaginationControls').innerHTML = '';
       return;
     }
 
-    const countEl = document.getElementById('rcaTableCount');
-    if (countEl) countEl.textContent = (resp.total || 0).toLocaleString();
-    const tbody = document.getElementById('rcaTableBody');
-
-    if (!tbody) return;
-    if (!resp.rows || resp.rows.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="14" class="analytics-empty">No rows match the current filters</td></tr>`;
-      document.getElementById('rcaPaginationInfo').textContent = '0 rows';
-      document.getElementById('rcaPaginationControls').innerHTML = '';
-      return;
-    }
-
-    const trunc = (s, n = 60) => {
-      const str = String(s || '');
-      return str.length > n ? str.slice(0, n) + '…' : str;
-    };
-
-    tbody.innerHTML = resp.rows.map(r => {
+    const trunc = (s, n = 60) => { const str = String(s || ''); return str.length > n ? str.slice(0, n) + '…' : str; };
+    tbody.innerHTML = appState.drillDown.rows.map(r => {
+      const sel = appState.selectedRows.has(r.caseId) ? 'selected' : '';
       const linkCell = (url, label) => url
         ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener" class="text-link">${label} ↗</a>`
         : `<span class="text-link disabled">—</span>`;
-
-      return `<tr>
+      return `<tr class="${sel}">
+        <td class="select-col"><input type="checkbox" ${sel ? 'checked' : ''} onchange="window.toggleRowSelection('${escapeJs(r.caseId)}', this.checked)"></td>
         <td>${escapeHtml(r.timestamp)}</td>
         <td><strong>${escapeHtml(r.caseId)}</strong></td>
-        <td><span class="defect-pill defect-pill-${escapeHtml(r.defect)}">${escapeHtml(r.defect)}</span></td>
+        <td><span class="defect-pill defect-pill-${escapeHtml(r.defect || 'Unknown')}">${escapeHtml(r.defect || '—')}</span></td>
         <td>${escapeHtml(r.product)}</td>
         <td>${escapeHtml(r.analyst)}</td>
         <td>${escapeHtml(r.qcReviewer)}</td>
         <td>${escapeHtml(r.errorSource)}</td>
         <td><strong>${escapeHtml(String(r.binaryDefectScore || '0'))}</strong></td>
         <td>
-          ${r.flagToTL     ? '<span class="action-pill active flag">🚩 TL</span>' : ''}
-          ${r.toBeAppealed ? '<span class="action-pill active appeal">⚖️ Appeal</span>' : ''}
-          ${r.failAccepted ? '<span class="action-pill active accepted">✓ Accept</span>' : ''}
+          ${r.flagToTL     ? '<span class="action-pill flag">🚩 TL</span>' : ''}
+          ${r.toBeAppealed ? '<span class="action-pill appeal">⚖️ Appeal</span>' : ''}
+          ${r.failAccepted ? '<span class="action-pill accepted">✓ Accept</span>' : ''}
         </td>
         <td>${linkCell(r.qcLink, 'QC')} · ${linkCell(r.boLink, 'BO')}</td>
         <td>${escapeHtml(String(r.cycleWorkToQc || ''))} / ${escapeHtml(String(r.cycleQcToRca || ''))}</td>
-        <td title="${escapeHtml(r.comments || '')}"><span class="table-cell-trunc">${escapeHtml(trunc(r.comments, 80))}</span></td>
-        <td title="${escapeHtml(r.sysFailTxt || '')}"><span class="table-cell-trunc">${escapeHtml(trunc(r.sysFailTxt, 80))}</span></td>
-        <td title="${escapeHtml(r.suggestedUpdate || '')}"><span class="table-cell-trunc">${escapeHtml(trunc(r.suggestedUpdate, 80))}</span></td>
+        <td title="${escapeHtml(r.comments || '')}"><span style="max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:inline-block;">${escapeHtml(trunc(r.comments, 80))}</span></td>
       </tr>`;
     }).join('');
 
-    const start = (resp.page - 1) * resp.pageSize + 1;
-    const end   = Math.min(start + resp.rows.length - 1, resp.total);
-    document.getElementById('rcaPaginationInfo').textContent = `Showing ${start.toLocaleString()}–${end.toLocaleString()} of ${resp.total.toLocaleString()}`;
-    document.getElementById('rcaPaginationControls').innerHTML = _buildPagination(resp.page, resp.pageSize, resp.total, 'loadRcaTable');
+    const start = (appState.drillDown.page - 1) * appState.drillDown.pageSize + 1;
+    const end   = Math.min(start + appState.drillDown.rows.length - 1, appState.drillDown.total);
+    $('rcaTablePaginationInfo').textContent = `Showing ${start.toLocaleString()}–${end.toLocaleString()} of ${appState.drillDown.total.toLocaleString()}`;
+    $('rcaPaginationControls').innerHTML = _buildPagination(appState.drillDown.page, appState.drillDown.pageSize, appState.drillDown.total, 'loadDrillDown');
   }
 
-  function exportRcaCsv() {
-    if (!rcaFilters) { showToast({ title: 'No filters set', type: 'warn' }); return; }
-    setConn('busy', 'Exporting…');
-    google.script.run
-      .withSuccessHandler(resp => {
-        setConn('online', 'Ready');
-        if (!resp || !resp.success) { showToast({ title: 'Export failed', description: (resp && resp.error) || 'Unknown error', type: 'error' }); return; }
-        const blob = new Blob([resp.csv], { type: 'text/csv;charset=utf-8;' });
-        const url  = URL.createObjectURL(blob);
-        const a    = document.createElement('a');
-        a.href = url;
-        a.download = `RCA_Export_${new Date().toISOString().slice(0, 10)}.csv`;
-        document.body.appendChild(a); a.click(); document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        showToast({ title: 'Exported', description: `${resp.rowCount} rows`, type: 'success' });
-      })
-      .withFailureHandler(err => { setConn('offline', 'Error'); showToast({ title: 'Export error', description: err.message, type: 'error' }); })
-      .exportRcaToCsv(rcaFilters);
-  }
+  function escapeJs(s) { return String(s).replace(/'/g, "\\'").replace(/"/g, '\\"'); }
 
-  function toggleActionDrawer() {
-    const drawer = document.getElementById('actionDrawer');
-    if (drawer) drawer.classList.toggle('open');
-    renderActionDrawer();
-  }
+  window.toggleRowSelection = function(caseId, selected) {
+    if (selected) appState.selectedRows.add(caseId);
+    else appState.selectedRows.delete(caseId);
+    renderDrillDownTable();
+  };
+  window.toggleSelectAll = function(checked) {
+    appState.drillDown.rows.forEach(r => {
+      if (checked) appState.selectedRows.add(r.caseId);
+      else appState.selectedRows.delete(r.caseId);
+    });
+    renderDrillDownTable();
+  };
+  window.clearRowSelection = function() { appState.selectedRows.clear(); renderDrillDownTable(); };
 
-  function flagInsight(title, dataKey) {
-    const ctx = { view: 'analytics', chart: dataKey || '', filters: getRcaFiltersFromUi(), timestamp: new Date().toISOString() };
-    const desc = `Insight flagged from RCA Analytics:\n"${title}"\n\nCurrent filter context:\n${JSON.stringify(ctx.filters, null, 2)}`;
-    actionCart.push({
-      id: Date.now() + Math.floor(Math.random() * 1000),
-      title, description: desc, category: 'Process', priority: 'Medium',
-      proposedOwner: 'Team Lead', context: ctx, status: 'draft'
+  window.reviewSelected = function() {
+    if (appState.selectedRows.size === 0) return showToast({ title: 'No rows selected', type: 'warn' });
+    showToast({ title: 'Review', description: `${appState.selectedRows.size} cases queued for review (TODO: open modal)`, type: 'info' });
+  };
+
+  window.flagSelected = function() {
+    if (appState.selectedRows.size === 0) return showToast({ title: 'No rows selected', type: 'warn' });
+    const cases = Array.from(appState.selectedRows);
+    flagRootCause({
+      title: `Review ${cases.length} flagged RCAs`,
+      description: 'Cases:\n' + cases.join('\n'),
+      category: 'Process',
+      priority: 'Medium',
+      context: { view: 'analytics', source: 'drill-down-selection', caseIds: cases, filters: rcaFilters }
+    });
+    showToast({ title: 'Flagged', description: `${cases.length} cases added to queue`, type: 'success' });
+  };
+
+  window.loadRcaTable = window.loadDrillDown;
+
+  function flagRootCause(opts) {
+    if (!opts || !opts.title) return;
+    const ctx = opts.context || { view: 'analytics', source: opts.source || 'manual', filters: rcaFilters, timestamp: new Date().toISOString() };
+    window.actionCart.push({
+      id: 'a' + Date.now() + Math.floor(Math.random() * 1000),
+      title: opts.title,
+      description: opts.description || `Flagged from RCA Analytics\nSource: ${opts.source || 'manual'}\n\nCurrent filter context:\n${JSON.stringify(rcaFilters, null, 2)}`,
+      category: opts.category || 'Process',
+      priority: opts.priority || 'Medium',
+      proposedOwner: opts.owner || 'Team Lead',
+      jiraType: opts.jiraType || 'Subtask',
+      source: opts.source || '',
+      context: ctx,
+      status: 'draft'
     });
     renderActionDrawer();
     updateActionBadge();
-    showToast({ title: 'Flagged for Jira', description: `"${title}" added to cart`, type: 'success' });
+    showToast({ title: '🚩 Flagged', description: `"${opts.title}" added to queue`, type: 'success' });
   }
+  window.flagRootCause = flagRootCause;
+  window.flagInsight = flagRootCause;
 
   function renderActionDrawer() {
-    const body = document.getElementById('actionDrawerBody');
-    if (!body) return;
-    if (!actionCart.length) { body.innerHTML = '<div class="diag-empty">No items flagged yet.<br>Click 🚩 on any chart or insight.</div>'; return; }
-    body.innerHTML = actionCart.map((item, idx) => `
+    const body = $('actionDrawerBody'); if (!body) return;
+    if (!window.actionCart.length) {
+      body.innerHTML = '<div style="padding:30px; text-align:center; color:var(--text-muted); font-size:12px;">🚩 No root causes flagged yet.<br><br>Click <strong>🚩</strong> on any chart or phase question to add items here.<br>Export as Jira subtasks when ready.</div>';
+      return;
+    }
+    body.innerHTML = window.actionCart.map((item, idx) => `
       <div class="action-item">
-        <div class="flex justify-between mb-1">
-          <span style="font-weight:700; color:var(--accent);">#${idx + 1}</span>
-          <button class="btn btn-ghost btn-sm" style="padding:2px 6px;" onclick="removeActionItem(${item.id})">🗑</button>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <span style="font-weight:700; color:var(--accent); font-size:11px;">#${idx + 1} · ${escapeHtml(item.source || 'manual')}</span>
+          <button class="btn btn-ghost btn-sm" style="padding:2px 6px; font-size:11px;" onclick="window.removeActionItem('${item.id}')">🗑</button>
         </div>
         <label>Summary</label>
-        <input value="${escapeHtml(item.title)}" onchange="actionCart[${idx}].title = this.value">
+        <input value="${escapeHtml(item.title)}" onchange="window.actionCart[${idx}].title = this.value">
         <label>Description</label>
-        <textarea rows="2" onchange="actionCart[${idx}].description = this.value">${escapeHtml(item.description)}</textarea>
+        <textarea rows="3" onchange="window.actionCart[${idx}].description = this.value">${escapeHtml(item.description)}</textarea>
         <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:6px; margin-top:6px;">
-          <div><label>Category</label><select onchange="actionCart[${idx}].category = this.value">${['Process','Product','Training','System','Policy'].map(c => `<option ${item.category === c ? 'selected' : ''}>${c}</option>`).join('')}</select></div>
-          <div><label>Priority</label><select onchange="actionCart[${idx}].priority = this.value">${['High','Medium','Low'].map(c => `<option ${item.priority === c ? 'selected' : ''}>${c}</option>`).join('')}</select></div>
-          <div><label>Owner</label><select onchange="actionCart[${idx}].proposedOwner = this.value">${['Team Lead','Product','Ops','QA','Engineering'].map(c => `<option ${item.proposedOwner === c ? 'selected' : ''}>${c}</option>`).join('')}</select></div>
+          <div><label>Category</label><select onchange="window.actionCart[${idx}].category = this.value">
+            ${['Process','Product','Training','System','Policy'].map(c => `<option ${item.category === c ? 'selected' : ''}>${c}</option>`).join('')}
+          </select></div>
+          <div><label>Priority</label><select onchange="window.actionCart[${idx}].priority = this.value">
+            ${['High','Medium','Low'].map(c => `<option ${item.priority === c ? 'selected' : ''}>${c}</option>`).join('')}
+          </select></div>
+          <div><label>Owner</label><select onchange="window.actionCart[${idx}].proposedOwner = this.value">
+            ${['Team Lead','Product','Ops','QA','Engineering'].map(c => `<option ${item.proposedOwner === c ? 'selected' : ''}>${c}</option>`).join('')}
+          </select></div>
         </div>
-        <button class="btn btn-primary btn-sm btn-block mt-1" onclick="submitActionItem(${idx})">💾 Send to Sheet</button>
-      </div>
-    `).join('');
+      </div>`).join('');
   }
+  window.renderActionDrawer = renderActionDrawer;
 
-  function removeActionItem(id) {
-    actionCart = actionCart.filter(i => i.id !== id);
+  function updateActionBadge() {
+    const badge = $('actionBadge'); if (!badge) return;
+    const count = window.actionCart.length;
+    if (count === 0) badge.style.display = 'none';
+    else { badge.style.display = 'grid'; badge.textContent = count > 99 ? '99+' : String(count); }
+  }
+  window.updateActionBadge = updateActionBadge;
+
+  window.toggleActionDrawer = function() {
+    const drawer = $('actionDrawer'); if (drawer) drawer.classList.toggle('open');
+    renderActionDrawer();
+  };
+
+  window.removeActionItem = function(id) {
+    window.actionCart = window.actionCart.filter(i => i.id !== id);
     renderActionDrawer();
     updateActionBadge();
-  }
+  };
 
-  function submitActionItem(idx) {
-    const item = actionCart[idx]; if (!item) return;
+  window.submitActionItem = function(idx) {
+    const item = window.actionCart[idx]; if (!item) return;
     google.script.run
       .withSuccessHandler(() => { showToast({ title: 'Saved to Action Items', type: 'success' }); item.status = 'saved'; renderActionDrawer(); })
       .withFailureHandler(err => showToast({ title: 'Save failed', description: err.message, type: 'error' }))
       .logActionItem(item);
-  }
+  };
 
-  function pushAllToSheet() {
-    const unsaved = actionCart.filter(i => i.status !== 'saved');
-    if (!unsaved.length) { showToast({ title: 'All items already saved' }); return; }
-    let done = 0;
-    let failed = 0;
+  window.pushAllToSheet = function() {
+    const unsaved = window.actionCart.filter(i => i.status !== 'saved');
+    if (!unsaved.length) return showToast({ title: 'All items already saved' });
+    let done = 0, failed = 0;
+    const total = unsaved.length;
     unsaved.forEach(item => {
       google.script.run
         .withSuccessHandler(() => {
-          done++;
-          item.status = 'saved';
-          if (done + failed === unsaved.length) {
-            showToast({ title: failed ? 'Some saved' : 'All saved', description: failed ? `${failed} failed` : `${done} items saved`, type: failed ? 'warn' : 'success' });
+          done++; item.status = 'saved';
+          if (done + failed === total) {
+            showToast({
+              title: failed ? 'Some saved' : 'All saved',
+              description: `${done} saved, ${failed} failed`,
+              type: failed ? 'warn' : 'success'
+            });
             renderActionDrawer();
+            updateActionBadge();
           }
         })
         .withFailureHandler(err => {
           failed++;
-          showToast({ title: 'Batch save error', description: err.message, type: 'error' });
+          showToast({ title: 'Batch error', description: err.message, type: 'error' });
+          if (done + failed === total) renderActionDrawer();
         })
         .logActionItem(item);
     });
-  }
+  };
 
-  // ✅ FIX — Pass items to server
-  function exportJiraCsv() {
-    if (!actionCart.length) { showToast({ title: 'Cart is empty', type: 'warn' }); return; }
+  window.exportJiraCsv = function() {
+    if (!window.actionCart.length) return showToast({ title: 'Cart is empty', type: 'warn' });
     google.script.run
       .withSuccessHandler(resp => {
-        if (!resp || !resp.success) { showToast({ title: 'Export failed', description: (resp && resp.error) || 'Unknown error', type: 'error' }); return; }
-        const blob = new Blob([resp.csv], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `RCA_Jira_Import_${new Date().toISOString().slice(0, 10)}.csv`;
-        document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
-        showToast({ title: 'Jira CSV exported', description: `${resp.count} rows ready for Jira bulk import`, type: 'success' });
+        if (!resp || !resp.success) return showToast({ title: 'Export failed', description: (resp && resp.error) || 'Unknown', type: 'error' });
+        downloadCsv(resp.csv, `RCA_Jira_Import_${new Date().toISOString().slice(0, 10)}.csv`);
+        showToast({ title: 'Jira CSV exported', description: `${resp.count} rows ready for Jira import`, type: 'success' });
       })
       .withFailureHandler(err => showToast({ title: 'Export error', description: err.message, type: 'error' }))
-      .exportActionsToJiraCsv({ items: actionCart });
+      .exportActionsToJiraCsv({ items: window.actionCart });
+  };
+
+  function downloadCsv(csv, filename) {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
 
-  function _barList(obj, orderKeys, limit) {
-    limit = limit || 8;
-    const entries = orderKeys
-      ? orderKeys.filter(k => obj && obj[k]).map(k => [k, obj[k]])
-      : Object.entries(obj || {}).sort((a, b) => b[1] - a[1]).slice(0, limit);
-    if (!entries.length) return '<div class="analytics-empty">No data</div>';
-    const max = Math.max(...entries.map(([, v]) => v), 1);
-    return entries.map(([k, v]) =>
-      `<div class="bar-row">
-         <div class="bar-label" title="${escapeHtml(k)}">${escapeHtml(k)}</div>
-         <div class="bar-track"><div class="bar-fill" style="width:${(v / max) * 100}%"></div></div>
-         <div class="bar-value">${v}</div>
-       </div>`
-    ).join('');
-  }
-
-  function _leaderboard(obj) {
-    const entries = Object.entries(obj || {});
-    if (!entries.length) return '<div class="analytics-empty">No data</div>';
-    const medals = ['gold', 'silver', 'bronze'];
-    return entries.map(([name, count], i) => {
-      const rankCls = i < 3 ? medals[i] : '';
-      const shortName = name.length > 28 ? name.slice(0, 26) + '…' : name;
-      return `<div class="lb-row" data-name="${escapeHtml(name)}" data-field="conductor">
-        <div class="lb-rank ${rankCls}">${i + 1}</div>
-        <div class="lb-name" title="${escapeHtml(name)}">${escapeHtml(shortName)}</div>
-        <div class="lb-count">${count}</div>
-      </div>`;
-    }).join('');
-  }
-
-  // ✅ FIX — Use event delegation (was missing)
-  document.addEventListener('click', (e) => {
-    const row = e.target.closest('.lb-row');
-    if (row && row.dataset.name) quickFilterBy(row.dataset.name, row.dataset.field || 'conductor');
-  });
-
-  function quickFilterBy(value, field) {
-    const map = {
-      conductor:  'rcaFilterConductor',  qcReviewer: 'rcaFilterQcReviewer',
-      analyst:    'rcaFilterAnalyst',    team:       'rcaFilterTeam',
-      agency:     'rcaFilterAgency',     product:    'rcaFilterProduct'
-    };
-    const id = map[field];
-    if (id && document.getElementById(id)) {
-      document.getElementById(id).value = value;
-      loadRcaAnalytics();
-      showToast({ title: 'Filter applied', description: `${field} = ${value}`, type: 'success' });
-    }
-  }
+  window.exportRcaCsv = function() {
+    google.script.run
+      .withSuccessHandler(resp => {
+        if (!resp || !resp.success) return showToast({ title: 'Export failed', description: (resp && resp.error) || 'Unknown', type: 'error' });
+        downloadCsv(resp.csv, `RCA_Export_${new Date().toISOString().slice(0, 10)}.csv`);
+        showToast({ title: 'Exported', description: `${resp.rowCount} rows`, type: 'success' });
+      })
+      .withFailureHandler(err => showToast({ title: 'Export error', description: err.message, type: 'error' }))
+      .exportRcaToCsv(rcaFilters);
+  };
 
   function _buildPagination(currentPage, pageSize, total, fnName) {
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -1281,36 +762,39 @@
     return buttons.join('');
   }
 
-  function chartBaseOpts({ yLabel, noData, noDataMsg } = {}) {
-    return {
-      responsive: true, maintainAspectRatio: false,
-      animation: { duration: 250 },
-      plugins: {
-        legend: { display: false },
-        tooltip: { mode: 'index', intersect: false },
-        ...(noData && { title: { display: true, text: noDataMsg || 'No data', color: cssVar('--chart-gray'), font: { size: 13 } } })
-      },
-      scales: {
-        x: { grid: { display: false }, ticks: { color: cssVar('--chart-tick'), maxRotation: 0, autoSkip: true, maxTicksLimit: 12 } },
-        y: {
-          beginAtZero: true,
-          ticks: { color: cssVar('--chart-tick'), precision: 0 },
-          grid: { color: cssVar('--chart-grid') },
-          title: yLabel ? { display: true, text: yLabel, color: cssVar('--chart-tick') } : undefined
-        }
-      }
-    };
-  }
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.preset-btn').forEach(b => b.addEventListener('click', () => window.applyDatePreset(b.dataset.preset)));
+    document.querySelectorAll('input[name="dateField"]').forEach(r => r.addEventListener('change', () => { updateFilterSummaries(); loadRcaAnalytics(); }));
+    ['rcaFilterFrom','rcaFilterTo'].forEach(id => { const el = $(id); if (el) el.addEventListener('change', () => { document.querySelector('.preset-btn[data-preset="CUSTOM"]').classList.add('active'); document.querySelectorAll('.preset-btn:not([data-preset="CUSTOM"])').forEach(b => b.classList.remove('active')); updateFilterSummaries(); loadRcaAnalytics(); }); });
+    const searchEl = $('rcaFilterSearch');
+    if (searchEl) searchEl.addEventListener('input', () => debounce(() => { updateFilterSummaries(); loadRcaAnalytics(); }, 350));
+    ['rcaFilterConductor','rcaFilterQcReviewer','rcaFilterAnalyst','rcaFilterTeam','rcaFilterAgency','rcaFilterProduct','rcaFilterCountry','rcaFilterAuthority','rcaFilterOrigin','rcaFilterTaskType','rcaFilterQcAgree','rcaFilterDefect','rcaFilterTypology','rcaFilterTag','rcaFilterPhase','rcaFilterFlagToTL','rcaFilterToBeAppealed','rcaFilterFailAccepted','rcaFilterAlreadyAppealed'].forEach(id => {
+      const el = $(id); if (el) el.addEventListener('change', () => { updateFilterSummaries(); loadRcaAnalytics(); });
+    });
 
-  // ✅ FIX — Escape helper (used to be missing from this script's scope)
-  function escapeHtml(s) {
-    return String(s == null ? '' : s).replace(/[&<>"']/g, m => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-    }[m]));
-  }
+    const applyBtn = $('rcaApplyBtn'); if (applyBtn) applyBtn.addEventListener('click', loadRcaAnalytics);
+    const clearBtn = $('rcaClearBtn'); if (clearBtn) clearBtn.addEventListener('click', window.clearRcaFilters);
 
-  window.__rcaCleanup = function () {
-    Object.keys(charts).forEach(destroyChart);
+    document.querySelectorAll('#trendControls button').forEach(btn => btn.addEventListener('click', () => {
+      const mode = btn.dataset.trend; if (!mode) return;
+      appState.trendMode = mode;
+      document.querySelectorAll('#trendControls button').forEach(b => b.classList.toggle('active', b === btn));
+      if (appState.analytics) renderTrendChart(appState.analytics);
+    }));
+
+    const qs = $('questionSearch');
+    if (qs) qs.addEventListener('input', () => { appState.questionFilter = qs.value; if (appState.analytics) renderQuestionBreakdown(appState.analytics); });
+
+    updateFilterSummaries();
+    updateActionBadge();
+    renderActionDrawer();
+  });
+
+  window.__rcaResizeCharts = function() {
+    setTimeout(() => { Object.values(charts).forEach(c => { try { c && c.resize(); } catch(e){} }); }, 50);
   };
+
+  window.__rcaCleanup = function() { Object.keys(charts).forEach(destroyChart); };
+
 })();
 </script>
