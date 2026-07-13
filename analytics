@@ -156,7 +156,7 @@
 (function () {
   'use strict';
   window.actionCart = window.actionCart || [];
-  const state = { analytics: null, selectedRows: new Set(), drillDown: { rows: [], total: 0, page: 1, pageSize: 25 }, trendMode: 'daily', questionFilter: '', expandedPhases: new Set([1, 2]) };
+  const appState = { analytics: null, selectedRows: new Set(), drillDown: { rows: [], total: 0, page: 1, pageSize: 25 }, trendMode: 'daily', questionFilter: '', expandedPhases: new Set([1, 2]) };
   let rcaFilters = {}; let _debounce = null; let charts = {};
   const KPI_WARN_DAYS = 7; const PHASE_CONFIG = buildPhaseConfig(); const PAGE_SIZE = 25;
   
@@ -168,7 +168,7 @@
   const debounce = (fn, ms) => { clearTimeout(_debounce); _debounce = setTimeout(fn, ms); };
   const destroyChart = (k) => { if (charts[k]) { try { charts[k].destroy(); } catch(e){} charts[k] = null; } };
 
-  function setAnalyticsConn(state, text) { const d = $('connectionDot'), l = $('connectionLabel'); if (d) d.className = 'connection-dot ' + state; if (l) l.textContent = text; }
+  function setAnalyticsConn(st, txt) { const d = $('connectionDot'), l = $('connectionLabel'); if (d) d.className = 'connection-dot ' + st; if (l) l.textContent = txt; }
   function showToast(o) { if (typeof window.showToast === 'function') return window.showToast(o); console.log('TOAST:', o.title, o.description || ''); }
 
   function buildPhaseConfig() {
@@ -244,9 +244,9 @@
 
   function onAnalyticsLoaded(resp) {
     if (!resp || !resp.success) { setAnalyticsConn('offline', 'Error'); showToast({ title: 'Failed', description: (resp && resp.error) || 'Unknown', type: 'error' }); return; }
-    state.analytics = resp.analytics; setAnalyticsConn('online', 'Ready');
-    const sub = $('rcaAnalyticsSubtitle'); if (sub) sub.textContent = `${fmtNum(resp.total)} RCAs in range · ${state.analytics.thisWeek || 0} this week · ${state.analytics.thisMonth || 0} this month`;
-    populateFilterDropdowns(state.analytics); renderKpis(state.analytics); renderTrendChart(state.analytics); renderDefectTrendChart(state.analytics); renderDefectLineChart(state.analytics); renderOriginChart(state.analytics); renderOriginLineChart(state.analytics); renderTeamChart(state.analytics); renderTeamLineChart(state.analytics); renderProductChart(state.analytics); renderProductLineChart(state.analytics); renderTypologyChart(state.analytics); renderTypologyLineChart(state.analytics); renderTagChart(state.analytics); renderTagLineChart(state.analytics); renderCycleChart(state.analytics); renderAgreementChart(state.analytics); renderSystemicChart(state.analytics); renderParetoChart(state.analytics); renderTopConductors(state.analytics); renderTopQcReviewers(state.analytics); renderLlmCharts(state.analytics); renderPhaseAnalysis(state.analytics); renderQuestionBreakdown(state.analytics);
+    appState.analytics = resp.analytics; setAnalyticsConn('online', 'Ready');
+    const sub = $('rcaAnalyticsSubtitle'); if (sub) sub.textContent = `${fmtNum(resp.total)} RCAs in range · ${appState.analytics.thisWeek || 0} this week · ${appState.analytics.thisMonth || 0} this month`;
+    populateFilterDropdowns(appState.analytics); renderKpis(appState.analytics); renderTrendChart(appState.analytics); renderDefectTrendChart(appState.analytics); renderDefectLineChart(appState.analytics); renderOriginChart(appState.analytics); renderOriginLineChart(appState.analytics); renderTeamChart(appState.analytics); renderTeamLineChart(appState.analytics); renderProductChart(appState.analytics); renderProductLineChart(appState.analytics); renderTypologyChart(appState.analytics); renderTypologyLineChart(appState.analytics); renderTagChart(appState.analytics); renderTagLineChart(appState.analytics); renderCycleChart(appState.analytics); renderAgreementChart(appState.analytics); renderSystemicChart(appState.analytics); renderParetoChart(appState.analytics); renderTopConductors(appState.analytics); renderTopQcReviewers(appState.analytics); renderLlmCharts(appState.analytics); renderPhaseAnalysis(appState.analytics); renderQuestionBreakdown(appState.analytics);
     loadDrillDown(1);
   }
 
@@ -277,8 +277,8 @@
   function renderTrendChart(a) {
     const canvas = $('rcaTrendChart'); if (!canvas || typeof Chart === 'undefined') return; destroyChart('trend');
     let data, label;
-    if (state.trendMode === 'weekly') { data = a.trendWeekly || []; label = 'RCAs per week'; }
-    else if (state.trendMode === 'monthly') { data = a.trendMonthly || []; label = 'RCAs per month'; }
+    if (appState.trendMode === 'weekly') { data = a.trendWeekly || []; label = 'RCAs per week'; }
+    else if (appState.trendMode === 'monthly') { data = a.trendMonthly || []; label = 'RCAs per month'; }
     else { data = a.trendDaily || []; label = 'RCAs per day'; }
     charts.trend = new Chart(canvas, { type: 'line', data: { labels: data.map(d => d.date || d.week || d.month), datasets: [{ label, data: data.map(d => d.count), borderColor: cssVar('--chart-line'), backgroundColor: cssVar('--chart-fill'), fill: true, tension: 0.35, pointBackgroundColor: cssVar('--chart-line'), pointRadius: data.length > 60 ? 0 : 3, pointHoverRadius: 5, borderWidth: 2 }]}, options: chartBaseOpts({ noData: data.length === 0 }) });
   }
@@ -299,17 +299,16 @@
   function renderBarAndLine(barId, lineId, barDataObj, lineDataArr, title) {
     const barCanvas = $(barId), lineCanvas = $(lineId); 
     if (!barCanvas || !lineCanvas || typeof Chart === 'undefined') return;
-    const barKey = barId.replace('rca','').replace('Chart','').toLowerCase(); destroyChart(barKey);
-    const lineKey = lineId.replace('rca','').replace('Chart','').replace('Line','').toLowerCase(); destroyChart(lineKey);
+    destroyChart(barId); destroyChart(lineId);
     
     const entries = Object.entries(barDataObj || {}).sort((a,b) => b[1]-a[1]).slice(0, 5);
     const labels = entries.map(([k]) => k.length > 26 ? k.slice(0, 24) + '…' : k); const data = entries.map(([, v]) => v);
-    charts[barKey] = new Chart(barCanvas, { type: 'bar', data: { labels, datasets: [{ data, backgroundColor: cssVar('--accent'), borderRadius: 4 }]}, options: { ...chartBaseOpts({ noData: entries.length === 0 }), indexAxis: 'y' } });
+    charts[barId] = new Chart(barCanvas, { type: 'bar', data: { labels, datasets: [{ data, backgroundColor: cssVar('--accent'), borderRadius: 4 }]}, options: { ...chartBaseOpts({ noData: entries.length === 0 }), indexAxis: 'y' } });
 
     const lineLabels = lineDataArr.map(d => d.date);
     const colors = [cssVar('--chart-red'), cssVar('--chart-blue'), cssVar('--chart-green'), cssVar('--chart-orange'), cssVar('--chart-purple')];
     const datasets = labels.map((l, i) => ({ label: l, data: lineDataArr.map(d => d[l] || 0), borderColor: colors[i % 5], backgroundColor: 'transparent', tension: 0.3, borderWidth: 2 }));
-    charts[lineKey] = new Chart(lineCanvas, { type: 'line', data: { labels: lineLabels, datasets }, options: { ...chartBaseOpts({ noData: lineDataArr.length === 0 }), plugins: { legend: { display: true, labels: { color: cssVar('--chart-tick'), font: { size: 10 } } } } } });
+    charts[lineId] = new Chart(lineCanvas, { type: 'line', data: { labels: lineLabels, datasets }, options: { ...chartBaseOpts({ noData: lineDataArr.length === 0 }), plugins: { legend: { display: true, labels: { color: cssVar('--chart-tick'), font: { size: 10 } } } } } });
   }
 
   function renderOriginChart(a)  { renderBarAndLine('rcaOriginChart', 'rcaOriginLineChart', a.byOrigin, a.trendDailyByOrigin, 'UAR Origin'); }
@@ -341,7 +340,7 @@
     const labels = ['Human Only', 'System Only', 'Both', 'Neither', 'Unknown'];
     const keys = ['humanOnly', 'systemOnly', 'both', 'neither', 'unknown'];
     const data = keys.map(k => svh[k] || 0);
-    const total = data.reduce((a,b)=>a+b, 0);
+    const total = data.reduce((acc, b) => acc + b, 0);
     const pData = total > 0 ? data.map(d => Math.round(d/total*100)) : [0,0,0,0,0];
     charts.systemic = new Chart(canvas, { type: 'doughnut', data: { labels, datasets: [{ data: pData, backgroundColor: [cssVar('--chart-orange'), cssVar('--chart-blue'), cssVar('--chart-red'), cssVar('--chart-gray'), cssVar('--chart-gray')], borderWidth: 2, borderColor: cssVar('--bg-card') || '#fff' }]}, options: { responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { position: 'right', labels: { color: cssVar('--chart-tick'), font: { size: 11 } } }, tooltip: { callbacks: { label: function(ctx) { return ctx.label + ': ' + ctx.raw + '%'; } } } } } });
   }
@@ -399,7 +398,7 @@
     const phaseStats = a.phaseStats || {};
     const html = PHASE_CONFIG.map(phase => {
       const phaseData = phaseStats[phase.num] || { pass: 0, fail: 0, total: 0, failRate: 0 };
-      const isOpen = state.expandedPhases.has(phase.num);
+      const isOpen = appState.expandedPhases.has(phase.num);
       const rateCls = phaseData.failRate > 30 ? 'rate-bad' : phaseData.failRate > 15 ? 'rate-warn' : 'rate-good';
       const questionsHtml = phase.questions.map(q => {
         const qStat = phaseData.questions && phaseData.questions[q.key] || { pass: 0, fail: 0, total: 0, failRate: 0, topReason: null };
@@ -442,21 +441,21 @@
   }
 
   window.togglePhase = function(num) {
-    if (state.expandedPhases.has(num)) state.expandedPhases.delete(num);
-    else state.expandedPhases.add(num);
+    if (appState.expandedPhases.has(num)) appState.expandedPhases.delete(num);
+    else appState.expandedPhases.add(num);
     const body = $('phaseBody' + num);
-    if (body) body.style.display = state.expandedPhases.has(num) ? 'block' : 'none';
+    if (body) body.style.display = appState.expandedPhases.has(num) ? 'block' : 'none';
   };
   window.expandAllPhases = function(expand) {
-    state.expandedPhases.clear();
-    if (expand) PHASE_CONFIG.forEach(p => state.expandedPhases.add(p.num));
-    if (state.analytics) renderPhaseAnalysis(state.analytics);
+    appState.expandedPhases.clear();
+    if (expand) PHASE_CONFIG.forEach(p => appState.expandedPhases.add(p.num));
+    if (appState.analytics) renderPhaseAnalysis(appState.analytics);
   };
 
   window.drillToQuestion = function(questionKey) {
     $('rcaFilterSearch').value = ''; 
     $('rcaFilterPhase').value = '';
-    if (state.expandedPhases.size === 0) expandAllPhases(true);
+    if (appState.expandedPhases.size === 0) expandAllPhases(true);
     setTimeout(() => {
       const el = document.querySelector(`[data-qkey="${questionKey}"]`);
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -475,7 +474,7 @@
         rows.push({ phase, q, s });
       });
     });
-    const filter = state.questionFilter.toLowerCase();
+    const filter = appState.questionFilter.toLowerCase();
     const filtered = filter ? rows.filter(r => r.q.label.toLowerCase().includes(filter) || `p${r.phase.num}`.includes(filter)) : rows;
     if (!filtered.length) {
       body.innerHTML = '<tr><td colspan="7" class="analytics-empty">No data in current filter</td></tr>';
@@ -501,7 +500,7 @@
   }
 
   window.loadDrillDown = function(page) {
-    state.drillDown.page = page;
+    appState.drillDown.page = page;
     rcaFilters = gatherFilters();
     google.script.run
       .withSuccessHandler(onDrillDownLoaded)
@@ -514,19 +513,19 @@
       showToast({ title: 'Failed', description: (resp && resp.error) || 'Unknown', type: 'error' });
       return;
     }
-    state.drillDown.rows = resp.rows || [];
-    state.drillDown.total = resp.total || 0;
-    state.drillDown.page = resp.page;
-    state.drillDown.pageSize = resp.pageSize;
+    appState.drillDown.rows = resp.rows || [];
+    appState.drillDown.total = resp.total || 0;
+    appState.drillDown.page = resp.page;
+    appState.drillDown.pageSize = resp.pageSize;
     renderDrillDownTable();
   }
 
   function renderDrillDownTable() {
     const tbody = $('rcaTableBody'); if (!tbody) return;
-    $('rcaTableCount').textContent = fmtNum(state.drillDown.total);
-    $('selectedCount').textContent = state.selectedRows.size;
+    $('rcaTableCount').textContent = fmtNum(appState.drillDown.total);
+    $('selectedCount').textContent = appState.selectedRows.size;
 
-    if (!state.drillDown.rows.length) {
+    if (!appState.drillDown.rows.length) {
       tbody.innerHTML = '<tr><td colspan="13" class="analytics-empty">No rows match the current filters</td></tr>';
       $('rcaTablePaginationInfo').textContent = '0 rows';
       $('rcaPaginationControls').innerHTML = '';
@@ -534,8 +533,8 @@
     }
 
     const trunc = (s, n = 60) => { const str = String(s || ''); return str.length > n ? str.slice(0, n) + '…' : str; };
-    tbody.innerHTML = state.drillDown.rows.map(r => {
-      const sel = state.selectedRows.has(r.caseId) ? 'selected' : '';
+    tbody.innerHTML = appState.drillDown.rows.map(r => {
+      const sel = appState.selectedRows.has(r.caseId) ? 'selected' : '';
       const linkCell = (url, label) => url
         ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener" class="text-link">${label} ↗</a>`
         : `<span class="text-link disabled">—</span>`;
@@ -560,36 +559,36 @@
       </tr>`;
     }).join('');
 
-    const start = (state.drillDown.page - 1) * state.drillDown.pageSize + 1;
-    const end   = Math.min(start + state.drillDown.rows.length - 1, state.drillDown.total);
-    $('rcaTablePaginationInfo').textContent = `Showing ${start.toLocaleString()}–${end.toLocaleString()} of ${state.drillDown.total.toLocaleString()}`;
-    $('rcaPaginationControls').innerHTML = _buildPagination(state.drillDown.page, state.drillDown.pageSize, state.drillDown.total, 'loadDrillDown');
+    const start = (appState.drillDown.page - 1) * appState.drillDown.pageSize + 1;
+    const end   = Math.min(start + appState.drillDown.rows.length - 1, appState.drillDown.total);
+    $('rcaTablePaginationInfo').textContent = `Showing ${start.toLocaleString()}–${end.toLocaleString()} of ${appState.drillDown.total.toLocaleString()}`;
+    $('rcaPaginationControls').innerHTML = _buildPagination(appState.drillDown.page, appState.drillDown.pageSize, appState.drillDown.total, 'loadDrillDown');
   }
 
   function escapeJs(s) { return String(s).replace(/'/g, "\\'").replace(/"/g, '\\"'); }
 
   window.toggleRowSelection = function(caseId, selected) {
-    if (selected) state.selectedRows.add(caseId);
-    else state.selectedRows.delete(caseId);
+    if (selected) appState.selectedRows.add(caseId);
+    else appState.selectedRows.delete(caseId);
     renderDrillDownTable();
   };
   window.toggleSelectAll = function(checked) {
-    state.drillDown.rows.forEach(r => {
-      if (checked) state.selectedRows.add(r.caseId);
-      else state.selectedRows.delete(r.caseId);
+    appState.drillDown.rows.forEach(r => {
+      if (checked) appState.selectedRows.add(r.caseId);
+      else appState.selectedRows.delete(r.caseId);
     });
     renderDrillDownTable();
   };
-  window.clearRowSelection = function() { state.selectedRows.clear(); renderDrillDownTable(); };
+  window.clearRowSelection = function() { appState.selectedRows.clear(); renderDrillDownTable(); };
 
   window.reviewSelected = function() {
-    if (state.selectedRows.size === 0) return showToast({ title: 'No rows selected', type: 'warn' });
-    showToast({ title: 'Review', description: `${state.selectedRows.size} cases queued for review (TODO: open modal)`, type: 'info' });
+    if (appState.selectedRows.size === 0) return showToast({ title: 'No rows selected', type: 'warn' });
+    showToast({ title: 'Review', description: `${appState.selectedRows.size} cases queued for review (TODO: open modal)`, type: 'info' });
   };
 
   window.flagSelected = function() {
-    if (state.selectedRows.size === 0) return showToast({ title: 'No rows selected', type: 'warn' });
-    const cases = Array.from(state.selectedRows);
+    if (appState.selectedRows.size === 0) return showToast({ title: 'No rows selected', type: 'warn' });
+    const cases = Array.from(appState.selectedRows);
     flagRootCause({
       title: `Review ${cases.length} flagged RCAs`,
       description: 'Cases:\n' + cases.join('\n'),
@@ -775,13 +774,13 @@
 
     document.querySelectorAll('#trendControls button').forEach(btn => btn.addEventListener('click', () => {
       const mode = btn.dataset.trend; if (!mode) return;
-      state.trendMode = mode;
+      appState.trendMode = mode;
       document.querySelectorAll('#trendControls button').forEach(b => b.classList.toggle('active', b === btn));
-      if (state.analytics) renderTrendChart(state.analytics);
+      if (appState.analytics) renderTrendChart(appState.analytics);
     }));
 
     const qs = $('questionSearch');
-    if (qs) qs.addEventListener('input', () => { state.questionFilter = qs.value; if (state.analytics) renderQuestionBreakdown(state.analytics); });
+    if (qs) qs.addEventListener('input', () => { appState.questionFilter = qs.value; if (appState.analytics) renderQuestionBreakdown(appState.analytics); });
 
     updateFilterSummaries();
     updateActionBadge();
