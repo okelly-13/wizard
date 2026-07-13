@@ -3,14 +3,45 @@
 // ============================================================
 
 function doGet(e) {
-  return HtmlService.createTemplateFromFile('Index')
+  var template;
+  try {
+    template = HtmlService.createTemplateFromFile('Index');
+  } catch (err1) {
+    try {
+      template = HtmlService.createTemplateFromFile('index');
+    } catch (err2) {
+      template = HtmlService.createTemplateFromFile('INDEX');
+    }
+  }
+  return template
     .evaluate()
-    .setTitle('FIU RCA Wizard')
+    .setTitle('FIU RCA Wizard');
 }
 
 function include(filename) {
-  try { return HtmlService.createHtmlOutputFromFile(filename).getContent(); } 
-  catch (e) { return '<!-- Error including ' + filename + ': ' + e.message + ' -->'; }
+  var candidates = [
+    filename,
+    filename.toLowerCase(),
+    filename.charAt(0).toUpperCase() + filename.slice(1).toLowerCase(),
+    filename.toUpperCase()
+  ];
+  // Filter candidates to unique values while keeping original order
+  var uniqueCandidates = [];
+  for (var i = 0; i < candidates.length; i++) {
+    if (uniqueCandidates.indexOf(candidates[i]) === -1) {
+      uniqueCandidates.push(candidates[i]);
+    }
+  }
+
+  var errors = [];
+  for (var j = 0; j < uniqueCandidates.length; j++) {
+    try {
+      return HtmlService.createHtmlOutputFromFile(uniqueCandidates[j]).getContent();
+    } catch (err) {
+      errors.push(uniqueCandidates[j] + ': ' + err.message);
+    }
+  }
+  return '<!-- Error including ' + filename + '. Tried candidates: ' + uniqueCandidates.join(', ') + '. Errors: ' + errors.join('; ') + ' -->';
 }
 
 // ============================================================
@@ -296,7 +327,14 @@ function _matchesRcaFilters(row, colIdx, f) {
   if (!eq(colIdx.conductor, f.conductor)) return false; if (!eq(colIdx.qcReviewer, f.qcReviewer)) return false; if (!eq(colIdx.analyst, f.analyst)) return false; if (!eq(colIdx.team, f.team)) return false; if (!eq(colIdx.agency, f.agency)) return false; if (!eq(colIdx.product, f.product)) return false; if (!eq(colIdx.country, f.country)) return false; if (!eq(colIdx.authority, f.authority)) return false; if (!eq(colIdx.origin, f.origin)) return false; if (!eq(colIdx.taskType, f.taskType)) return false; if (!eq(colIdx.errorSource, f.errorSource)) return false;
 
   if (f.rcaAgree) { var rcaIdx = colIdx.rcaAgree, stored = ''; if (rcaIdx >= 0) { var parts = String(row[rcaIdx] || '').split(/[\s\-]/); stored = parts[0] || ''; } if (stored !== f.rcaAgree) return false; }
-  if (f.defect) { var raw = colIdx.outcomeDefect >= 0 ? String(row[colIdx.outcomeDefect] || '') : ''; if (raw !== f.defect) return false; }
+  if (f.defect) {
+    var raw = colIdx.outcomeDefect >= 0 ? String(row[colIdx.outcomeDefect] || '').toUpperCase() : '';
+    var normalizedDefect = 'None';
+    if (raw === 'CRITICAL' || raw === 'OUTCOME') normalizedDefect = 'Critical';
+    else if (raw === 'MAJOR') normalizedDefect = 'Major';
+    else if (raw === 'MINOR') normalizedDefect = 'Minor';
+    if (normalizedDefect !== f.defect) return false;
+  }
   if (f.typology && !includesAny(colIdx.typologies, f.typology)) return false; if (f.tag && !includesAny(colIdx.riskTags, f.tag)) return false;
 
   if (f.flagToTL !== undefined && f.flagToTL !== null) { if (asBool(colIdx.flagToTL) !== f.flagToTL) return false; }
