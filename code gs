@@ -6,7 +6,6 @@ function doGet(e) {
   return HtmlService.createTemplateFromFile('Index')
     .evaluate()
     .setTitle('FIU RCA Wizard')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
 function include(filename) {
@@ -45,13 +44,13 @@ var CURRENT_SCHEMA = [
 ];
 
 var PHASE_QUESTION_CONFIG = [
-  { phase: 1, key: 'p1Scope', passValue: 'Yes', failValue: 'No' }, { phase: 1, key: 'duplicateIdentified', passValue: 'Yes', failValue: 'No' }, { phase: 1, key: 'p1DuplicateAction', passValue: 'Yes', failValue: 'No' }, { phase: 1, key: 'p1MultiSuspect', passValue: 'Yes', failValue: 'No' },
-  { phase: 2, key: 'p2Baseline', passValue: 'Yes', failValue: 'No', reasonKey: 'p2BaselineFail' }, { phase: 2, key: 'p2Osint', passValue: 'Yes', failValue: 'No', reasonKey: 'p2OsintFail' }, { phase: 2, key: 'p2OsintDoc', passValue: 'Yes', failValue: 'No' },
-  { phase: 3, key: 'p3Baseline', passValue: 'Yes', failValue: 'No', reasonKey: 'p3BaselineFail' }, { phase: 3, key: 'p3Module', passValue: 'Yes', failValue: 'No', reasonKey: 'p3ModuleFail' },
+  { phase: 1, key: 'p1Scope', passValue: 'Yes', failValue: 'No' }, { phase: 1, key: 'duplicateIdentified', passValue: 'Yes', failValue: 'No' }, { phase: 1, key: 'p1DuplicateAction', passValue: 'Yes', failValue: 'No' }, { phase: 1, key: 'p1MultiSuspect', passValue: 'Yes', failValue: 'No' }, { phase: 1, key: 'p1AnalystIdentified', passValue: 'Yes', failValue: 'No' },
+  { phase: 2, key: 'p2Baseline', passValue: 'Yes', failValue: 'No', reasonKey: 'p2BaselineFail' }, { phase: 2, key: 'p2BaselineFail', passValue: 'Yes', failValue: 'No' }, { phase: 2, key: 'p2Osint', passValue: 'Yes', failValue: 'No', reasonKey: 'p2OsintFail' }, { phase: 2, key: 'p2OsintFail', passValue: 'Yes', failValue: 'No' }, { phase: 2, key: 'p2OsintDoc', passValue: 'Yes', failValue: 'No' },
+  { phase: 3, key: 'p3Baseline', passValue: 'Yes', failValue: 'No', reasonKey: 'p3BaselineFail' }, { phase: 3, key: 'p3BaselineFail', passValue: 'Yes', failValue: 'No' }, { phase: 3, key: 'p3Module', passValue: 'Yes', failValue: 'No', reasonKey: 'p3ModuleFail' }, { phase: 3, key: 'p3ModuleFail', passValue: 'Yes', failValue: 'No' },
   { phase: 4, key: 'p4ShortFull', passValue: 'Yes', failValue: 'No' }, { phase: 4, key: 'p4CorrectAll', passValue: 'Yes', failValue: 'No' },
-  { phase: 5, key: 'p5Decision', passValue: 'Yes', failValue: 'No', reasonKey: 'p5ActionError' },
+  { phase: 5, key: 'p5Decision', passValue: 'Yes', failValue: 'No', reasonKey: 'p5ActionError' }, { phase: 5, key: 'p5ActionError', passValue: 'Yes', failValue: 'No' }, { phase: 5, key: 'p5Juris', passValue: 'Yes', failValue: 'No', reasonKey: 'p5JurisTxt' }, { phase: 5, key: 'p5Excep', passValue: 'Yes', failValue: 'No', reasonKey: 'p5ExcepTxt' }, { phase: 5, key: 'p5Biz', passValue: 'Yes', failValue: 'No', reasonKey: 'p5BizTxt' },
   { phase: 6, key: 'p6Edd', passValue: 'Yes', failValue: 'No', reasonKey: 'p6EddTxt' }, { phase: 6, key: 'p6Juris', passValue: 'Yes', failValue: 'No', reasonKey: 'p6JurisTxt' }, { phase: 6, key: 'p6Template', passValue: 'Yes', failValue: 'No', reasonKey: 'p6TemplateTxt' }, { phase: 6, key: 'p6Dante', passValue: 'Yes', failValue: 'No', reasonKey: 'p6DanteTxt' }, { phase: 6, key: 'p6Tags', passValue: 'Yes', failValue: 'No', reasonKey: 'p6TagsTxt' }, { phase: 6, key: 'p6Alerts', passValue: 'Yes', failValue: 'No', reasonKey: 'p6AlertsTxt' }, { phase: 6, key: 'p6Offboard', passValue: 'Yes', failValue: 'No', reasonKey: 'p6OffboardTxt' }, { phase: 6, key: 'p6Suspects', passValue: 'Yes', failValue: 'No', reasonKey: 'p6SuspectsTxt' }, { phase: 6, key: 'p6Refunds', passValue: 'Yes', failValue: 'No', reasonKey: 'p6RefundsTxt' },
-  { phase: 7, key: 'p7Vague', passValue: 'No', failValue: 'Yes (Defect)' }, { phase: 7, key: 'p7BrokenStrings', passValue: 'No', failValue: 'Yes (Defect)' }, { phase: 7, key: 'p7UpstreamFlags', passValue: 'Yes', failValue: 'No (Defect)' }, { phase: 7, key: 'p7ExtEnquiry', passValue: 'Yes', failValue: 'No (Defect)' },
+  { phase: 7, key: 'p7Vague', passValue: 'No', failValue: 'Yes (Defect)' }, { phase: 7, key: 'p7BrokenStrings', passValue: 'No', failValue: 'Yes (Defect)' }, { phase: 7, key: 'p7UpstreamFlags', passValue: 'Yes', failValue: 'No (Defect)' }, { phase: 7, key: 'p7ExtEnquiry', passValue: 'Yes', failValue: 'No (Defect)' }, { phase: 7, key: 'negativeImpact', passValue: 'No', failValue: 'Yes' },
   // LLM Outputs per phase
   { phase: 1, key: 'p1LlmOutput', passValue: 'Yes', failValue: 'No', reasonKey: 'p1LlmFail' },
   { phase: 2, key: 'p2LlmOutput', passValue: 'Yes', failValue: 'No', reasonKey: 'p2LlmFail' },
@@ -344,59 +343,114 @@ function getRcaAnalytics(filters) {
 }
 
 function _aggregateRcaResults(rows, colIdx, feedDefects) {
+  // ✅ Hoisted helpers — declare BEFORE the loop
+  function mapCat(store, dayKey, val) {
+    if (!store[dayKey]) store[dayKey] = {};
+    store[dayKey][val] = (store[dayKey][val] || 0) + 1;
+  }
+  
+  function countInc(obj, val) {
+    if (val) obj[val] = (obj[val] || 0) + 1;
+  }
+  
+  function formatCatTrend(map) {
+    return Object.keys(map).sort().map(function(k) {
+      var d = map[k];
+      Object.keys(d).forEach(function(sk) { d[sk] = d[sk]; });
+      return Object.assign({ date: k }, d);
+    });
+  }
+  
   var now = new Date(), weekAgo = new Date(now.getTime() - 7 * 86400000), monthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
   var stats = {
-    total: rows.length, thisWeek: 0, thisMonth: 0, avgPerDay: 0, agreementRate: 0, agreementBreakdown: { yes: 0, no: 0, other: 0 },
-    cycleTime: { avgWorkToQc: 0, avgQcToRca: 0 }, trendDaily: [], trendWeekly: [], trendMonthly: [], trendDailyByDefect: [], cycleTimeTrendWeekly: [],
-    cascading: {}, agreementTrendDaily: {}, byDefect: {}, byTeam: {}, byConductor: {}, byQcReviewer: {}, byAnalyst: {}, byAgency: {}, byProduct: {}, byCountry: {}, byAuthority: {}, byOrigin: {}, byTaskType: {}, byErrorSource: {},
+    total: rows.length, thisWeek: 0, thisMonth: 0, avgPerDay: 0, agreementRate: 0,
+    agreementBreakdown: { yes: 0, no: 0, other: 0 },
+    cycleTime: { avgWorkToQc: 0, avgQcToRca: 0 },
+    trendDaily: [], trendWeekly: [], trendMonthly: [], trendDailyByDefect: [], cycleTimeTrendWeekly: [],
+    cascading: {}, agreementTrendDaily: {}, byDefect: {}, byTeam: {}, byConductor: {},
+    byQcReviewer: {}, byAnalyst: {}, byAgency: {}, byProduct: {}, byCountry: {},
+    byAuthority: {}, byOrigin: {}, byTaskType: {}, byErrorSource: {},
     topConductors: {}, topQcReviewers: {}, topTypologies: {}, topRiskTags: {},
-    criticalCount: 0, criticalRate: 0, avgDefectScore: 0, flagRate: 0, flagged: { flagToTL: 0, toBeAppealed: 0, failAccepted: 0, wasAppealed: 0 }, appealRate: 0,
-    phaseFailure: {}, systemicVsHuman: { humanOnly: 0, systemOnly: 0, both: 0, neither: 0, unknown: 0 }, paretoFailures: [], analystMatrix: [],
-    cycleHistogramW2Q: [], cycleHistogramQ2R: [], phaseHeatmap: [], phaseStats: {},
-    trendDailyByOrigin: [], trendDailyByTeam: [], trendDailyByProduct: [], trendDailyByTypology: [], trendDailyByTag: [], trendDailyLlm: []
+    criticalCount: 0, criticalRate: 0, avgDefectScore: 0, flagRate: 0,
+    flagged: { flagToTL: 0, toBeAppealed: 0, failAccepted: 0, wasAppealed: 0 },
+    appealRate: 0,
+    phaseFailure: {},
+    systemicVsHuman: { humanOnly: 0, systemOnly: 0, both: 0, neither: 0, unknown: 0 },
+    paretoFailures: [], analystMatrix: [],
+    cycleHistogramW2Q: [], cycleHistogramQ2R: [], phaseHeatmap: [],
+    phaseStats: {},   // ← your previous fix from the first answer
+    trendDailyByOrigin: [], trendDailyByTeam: [], trendDailyByProduct: [],
+    trendDailyByTypology: [], trendDailyByTag: [], trendDailyLlm: []
   };
 
-  var dailyMap = {}, weeklyMap = {}, monthlyMap = {}, dailyDefectMap = {}, cycleWeeklyMap = {}, analystStats = {}, histogramW2Q = {}, histogramQ2R = {}, heatmapData = {};
-  var dailyOriginMap = {}, dailyTeamMap = {}, dailyProductMap = {}, dailyTypologyMap = {}, dailyTagMap = {}, dailyLlmMap = {};
+  var dailyMap = {}, weeklyMap = {}, monthlyMap = {}, dailyDefectMap = {},
+      cycleWeeklyMap = {}, analystStats = {}, histogramW2Q = {}, histogramQ2R = {}, heatmapData = {};
+  var dailyOriginMap = {}, dailyTeamMap = {}, dailyProductMap = {},
+      dailyTypologyMap = {}, dailyTagMap = {}, dailyLlmMap = {};
   var defectSum = 0, workToQcSum = 0, workToQcCount = 0, qcToRcaSum = 0, qcToRcaCount = 0;
 
   rows.forEach(function(row) {
     var tsRaw = row[colIdx.timestamp], ts = tsRaw instanceof Date ? tsRaw : new Date(tsRaw);
     if (isNaN(ts.getTime())) return;
-    if (ts > weekAgo) stats.thisWeek++; if (ts > monthAgo) stats.thisMonth++;
+    if (ts > weekAgo) stats.thisWeek++;
+    if (ts > monthAgo) stats.thisMonth++;
 
     var dayKey = Utilities.formatDate(ts, Session.getScriptTimeZone(), 'yyyy-MM-dd');
     var weekKey = _getWeekKey(ts);
     var monthKey = Utilities.formatDate(ts, Session.getScriptTimeZone(), 'yyyy-MM');
 
-    dailyMap[dayKey] = (dailyMap[dayKey] || 0) + 1; weeklyMap[weekKey] = (weeklyMap[weekKey] || 0) + 1; monthlyMap[monthKey] = (monthlyMap[monthKey] || 0) + 1;
+    dailyMap[dayKey] = (dailyMap[dayKey] || 0) + 1;
+    weeklyMap[weekKey] = (weeklyMap[weekKey] || 0) + 1;
+    monthlyMap[monthKey] = (monthlyMap[monthKey] || 0) + 1;
 
     if (!dailyDefectMap[dayKey]) dailyDefectMap[dayKey] = { date: dayKey, Critical: 0, Major: 0, Minor: 0, None: 0 };
     var defRaw = String(row[colIdx.outcomeDefect] || '');
     if (!defRaw && feedDefects[String(row[colIdx.caseId])]) { defRaw = feedDefects[String(row[colIdx.caseId])]; }
     defRaw = defRaw === 'Outcome' ? 'Critical' : (defRaw.charAt(0).toUpperCase() + defRaw.slice(1).toLowerCase());
     if (['Critical', 'Major', 'Minor', 'None'].indexOf(defRaw) === -1) defRaw = 'None';
-    if (dailyDefectMap[dayKey][defRaw] !== undefined) dailyDefectMap[dayKey][defRaw]++; else dailyDefectMap[dayKey]['None']++;
+    if (dailyDefectMap[dayKey][defRaw] !== undefined) dailyDefectMap[dayKey][defRaw]++;
+    else dailyDefectMap[dayKey]['None']++;
 
-    // Category daily maps
-    function mapCat(store, key, val) { if (!store[dayKey]) store[dayKey] = {}; store[dayKey][val] = (store[dayKey][val] || 0) + 1; }
+    // ✅ Now just calls — no function declarations inside the loop
     mapCat(dailyOriginMap, dayKey, row[colIdx.origin]);
     mapCat(dailyTeamMap, dayKey, row[colIdx.team]);
     mapCat(dailyProductMap, dayKey, row[colIdx.product]);
-    
+
     if (!dailyLlmMap[dayKey]) dailyLlmMap[dayKey] = { date: dayKey, p1: 0, p2: 0, p3: 0, p4: 0, p5: 0, p6: 0 };
-    for (var p=1; p<=6; p++) { if (String(row[colIdx['p'+p+'LlmOutput']]) === 'No') dailyLlmMap[dayKey]['p'+p]++; }
+    for (var p = 1; p <= 6; p++) {
+      if (String(row[colIdx['p' + p + 'LlmOutput']]) === 'No') dailyLlmMap[dayKey]['p' + p]++;
+    }
 
     if (!cycleWeeklyMap[weekKey]) cycleWeeklyMap[weekKey] = { week: weekKey, w2qSum: 0, w2qCnt: 0, q2rSum: 0, q2rCnt: 0 };
-    var w2q = parseFloat(row[colIdx.cycleWorkToQc]), q2r = parseFloat(row[colIdx.cycleQcToRca]);
-    if (!isNaN(w2q)) { cycleWeeklyMap[weekKey].w2qSum += w2q; cycleWeeklyMap[weekKey].w2qCnt++; var bin = Math.min(Math.floor(w2q), 20); histogramW2Q[bin] = (histogramW2Q[bin] || 0) + 1; }
-    if (!isNaN(q2r)) { cycleWeeklyMap[weekKey].q2rSum += q2r; cycleWeeklyMap[weekKey].q2rCnt++; var bin2 = Math.min(Math.floor(q2r), 20); histogramQ2R[bin2] = (histogramQ2R[bin2] || 0) + 1; }
+    var w2q = parseFloat(row[colIdx.cycleWorkToQc]);
+    var q2r = parseFloat(row[colIdx.cycleQcToRca]);
+    if (!isNaN(w2q)) {
+      cycleWeeklyMap[weekKey].w2qSum += w2q;
+      cycleWeeklyMap[weekKey].w2qCnt++;
+      var bin = Math.min(Math.floor(w2q), 20);
+      histogramW2Q[bin] = (histogramW2Q[bin] || 0) + 1;
+    }
+    if (!isNaN(q2r)) {
+      cycleWeeklyMap[weekKey].q2rSum += q2r;
+      cycleWeeklyMap[weekKey].q2rCnt++;
+      var bin2 = Math.min(Math.floor(q2r), 20);
+      histogramQ2R[bin2] = (histogramQ2R[bin2] || 0) + 1;
+    }
 
     var qcAgree = String(row[colIdx.rcaAgree] || '');
     if (!stats.agreementTrendDaily[dayKey]) stats.agreementTrendDaily[dayKey] = { yes: 0, no: 0, total: 0 };
     stats.agreementTrendDaily[dayKey].total++;
-    if (/^yes/i.test(qcAgree)) { stats.agreementBreakdown.yes++; stats.agreementTrendDaily[dayKey].yes++; } else if (/^no/i.test(qcAgree)) { stats.agreementBreakdown.no++; stats.agreementTrendDaily[dayKey].no++; } else stats.agreementBreakdown.other++;
-    var yy = stats.agreementTrendDaily[dayKey].yes, nn = stats.agreementTrendDaily[dayKey].no;
+    if (/^yes/i.test(qcAgree)) {
+      stats.agreementBreakdown.yes++;
+      stats.agreementTrendDaily[dayKey].yes++;
+    } else if (/^no/i.test(qcAgree)) {
+      stats.agreementBreakdown.no++;
+      stats.agreementTrendDaily[dayKey].no++;
+    } else {
+      stats.agreementBreakdown.other++;
+    }
+    var yy = stats.agreementTrendDaily[dayKey].yes;
+    var nn = stats.agreementTrendDaily[dayKey].no;
     stats.agreementTrendDaily[dayKey].rate = +(yy / (yy + nn || 1) * 100).toFixed(1);
 
     if (!heatmapData[monthKey]) heatmapData[monthKey] = { month: monthKey, p2: 0, p3: 0, p4: 0, p5: 0, p6: 0, p7: 0, total: 0 };
@@ -407,14 +461,19 @@ function _aggregateRcaResults(rows, colIdx, feedDefects) {
       if (!stats.phaseStats[cfg.phase]) stats.phaseStats[cfg.phase] = { pass: 0, fail: 0, total: 0, failRate: 0, questions: {} };
       var phaseData = stats.phaseStats[cfg.phase];
       if (!phaseData.questions[cfg.key]) phaseData.questions[cfg.key] = { pass: 0, fail: 0, total: 0, failRate: 0, topReason: null, _reasons: {} };
-      var qStat = phaseData.questions[cfg.key]; var qIdx = colIdx[cfg.key], qVal = String(row[qIdx] || '');
+      var qStat = phaseData.questions[cfg.key];
+      var qIdx = colIdx[cfg.key];
+      var qVal = String(row[qIdx] || '');
 
-      if (qVal === cfg.passValue) { phaseData.pass++; qStat.pass++; phaseData.total++; qStat.total++; }
-      else if (qVal === cfg.failValue) {
+      if (qVal === cfg.passValue) {
+        phaseData.pass++; qStat.pass++; phaseData.total++; qStat.total++;
+      } else if (qVal === cfg.failValue) {
         phaseData.fail++; qStat.fail++; phaseData.total++; qStat.total++;
-        var prefix = 'p' + cfg.phase; if (heatmapData[monthKey][prefix] !== undefined) heatmapData[monthKey][prefix]++;
+        var prefix = 'p' + cfg.phase;
+        if (heatmapData[monthKey][prefix] !== undefined) heatmapData[monthKey][prefix]++;
         if (cfg.reasonKey) {
-          var reasonIdx = colIdx[cfg.reasonKey], reasonText = 'Other';
+          var reasonIdx = colIdx[cfg.reasonKey];
+          var reasonText = 'Other';
           if (reasonIdx != null && reasonIdx >= 0) reasonText = String(row[reasonIdx] || 'Other');
           qStat._reasons[reasonText] = (qStat._reasons[reasonText] || 0) + 1;
           if (!stats.cascading[cfg.key]) stats.cascading[cfg.key] = {};
@@ -423,71 +482,162 @@ function _aggregateRcaResults(rows, colIdx, feedDefects) {
       }
     }
 
-    var defectVal = defRaw; stats.byDefect[defectVal] = (stats.byDefect[defectVal] || 0) + 1; if (defectVal === 'Critical') stats.criticalCount++;
-    var score = parseFloat(row[colIdx.binaryDefectScore]); if (!isNaN(score)) defectSum += score;
+    var defectVal = defRaw;
+    stats.byDefect[defectVal] = (stats.byDefect[defectVal] || 0) + 1;
+    if (defectVal === 'Critical') stats.criticalCount++;
+    var score = parseFloat(row[colIdx.binaryDefectScore]);
+    if (!isNaN(score)) defectSum += score;
 
     if (row[colIdx.flagToTL] === 'TRUE' || row[colIdx.flagToTL] === true) stats.flagged.flagToTL++;
     if (row[colIdx.toBeAppealed] === 'TRUE' || row[colIdx.toBeAppealed] === true) stats.flagged.toBeAppealed++;
     if (row[colIdx.failAccepted] === 'TRUE' || row[colIdx.failAccepted] === true) stats.flagged.failAccepted++;
     if (row[colIdx.wasAppealed] === 'TRUE' || row[colIdx.wasAppealed] === true) stats.flagged.wasAppealed++;
 
-    function count(obj, val) { if (val) obj[val] = (obj[val] || 0) + 1; }
-    count(stats.byConductor, row[colIdx.conductor]); count(stats.byQcReviewer, row[colIdx.qcReviewer]); count(stats.byTeam, row[colIdx.team]); count(stats.byAnalyst, row[colIdx.analyst]); count(stats.byAgency, row[colIdx.agency]);
-    count(stats.byProduct, row[colIdx.product]); count(stats.byCountry, row[colIdx.country]); count(stats.byAuthority, row[colIdx.authority]); count(stats.byOrigin, row[colIdx.origin]); count(stats.byTaskType, row[colIdx.taskType]); count(stats.byErrorSource, row[colIdx.errorSource]);
-    count(stats.topConductors, row[colIdx.conductor]); count(stats.topQcReviewers, row[colIdx.qcReviewer]);
+    // ✅ Use hoisted countInc instead of declaring `count` inside the loop
+    countInc(stats.byConductor, row[colIdx.conductor]);
+    countInc(stats.byQcReviewer, row[colIdx.qcReviewer]);
+    countInc(stats.byTeam, row[colIdx.team]);
+    countInc(stats.byAnalyst, row[colIdx.analyst]);
+    countInc(stats.byAgency, row[colIdx.agency]);
+    countInc(stats.byProduct, row[colIdx.product]);
+    countInc(stats.byCountry, row[colIdx.country]);
+    countInc(stats.byAuthority, row[colIdx.authority]);
+    countInc(stats.byOrigin, row[colIdx.origin]);
+    countInc(stats.byTaskType, row[colIdx.taskType]);
+    countInc(stats.byErrorSource, row[colIdx.errorSource]);
+    countInc(stats.topConductors, row[colIdx.conductor]);
+    countInc(stats.topQcReviewers, row[colIdx.qcReviewer]);
 
     var typs = String(row[colIdx.typologies] || '').split(/,|\n/);
-    for (var t = 0; t < typs.length; t++) { if (typs[t].trim()) { count(stats.topTypologies, typs[t].trim()); mapCat(dailyTypologyMap, dayKey, typs[t].trim()); } }
+    for (var t = 0; t < typs.length; t++) {
+      if (typs[t].trim()) {
+        countInc(stats.topTypologies, typs[t].trim());
+        mapCat(dailyTypologyMap, dayKey, typs[t].trim());
+      }
+    }
     var tags = String(row[colIdx.riskTags] || '').split(/,|\n/);
-    for (var t2 = 0; t2 < tags.length; t2++) { if (tags[t2].trim()) { count(stats.topRiskTags, tags[t2].trim()); mapCat(dailyTagMap, dayKey, tags[t2].trim()); } }
+    for (var t2 = 0; t2 < tags.length; t2++) {
+      if (tags[t2].trim()) {
+        countInc(stats.topRiskTags, tags[t2].trim());
+        mapCat(dailyTagMap, dayKey, tags[t2].trim());
+      }
+    }
 
-    var an = row[colIdx.analyst]; if (an) { if (!analystStats[an]) analystStats[an] = { count: 0, scoreSum: 0, cycleSum: 0, cycleCnt: 0 }; analystStats[an].count++; if (!isNaN(score)) analystStats[an].scoreSum += score; if (!isNaN(w2q)) { analystStats[an].cycleSum += w2q; analystStats[an].cycleCnt++; } }
+    var an = row[colIdx.analyst];
+    if (an) {
+      if (!analystStats[an]) analystStats[an] = { count: 0, scoreSum: 0, cycleSum: 0, cycleCnt: 0 };
+      analystStats[an].count++;
+      if (!isNaN(score)) analystStats[an].scoreSum += score;
+      if (!isNaN(w2q)) {
+        analystStats[an].cycleSum += w2q;
+        analystStats[an].cycleCnt++;
+      }
+    }
 
-    var errSrc = String(row[colIdx.errorSource] || '').toLowerCase(); var sysFail = String(row[colIdx.systemProcessFail] || '').toLowerCase();
+    var errSrc = String(row[colIdx.errorSource] || '').toLowerCase();
+    var sysFail = String(row[colIdx.systemProcessFail] || '').toLowerCase();
     if (errSrc === 'performance' && sysFail === 'no') stats.systemicVsHuman.humanOnly++;
     else if (errSrc === 'process/product' && sysFail === 'yes') stats.systemicVsHuman.systemOnly++;
     else if (errSrc === 'both' || (errSrc === 'performance' && sysFail === 'yes') || (errSrc === 'process/product' && sysFail === 'no')) stats.systemicVsHuman.both++;
     else if (errSrc === 'neither') stats.systemicVsHuman.neither++;
     else stats.systemicVsHuman.unknown++;
 
-    if (!isNaN(w2q)) { workToQcSum += w2q; workToQcCount++; } if (!isNaN(q2r)) { qcToRcaSum += q2r; qcToRcaCount++; }
+    if (!isNaN(w2q)) { workToQcSum += w2q; workToQcCount++; }
+    if (!isNaN(q2r)) { qcToRcaSum += q2r; qcToRcaCount++; }
   });
 
   Object.keys(dailyMap).sort().forEach(function(k) { stats.trendDaily.push({ date: k, count: dailyMap[k] }); });
   Object.keys(weeklyMap).sort().forEach(function(k) { stats.trendWeekly.push({ week: k, count: weeklyMap[k] }); });
   Object.keys(monthlyMap).sort().forEach(function(k) { stats.trendMonthly.push({ month: k, count: monthlyMap[k] }); });
   Object.keys(dailyDefectMap).sort().forEach(function(k) { stats.trendDailyByDefect.push(dailyDefectMap[k]); });
-  
-  function formatCatTrend(map) { return Object.keys(map).sort().map(function(k) { var d = map[k]; Object.keys(d).forEach(function(sk) { d[sk] = d[sk]; }); return Object.assign({ date: k }, d); }); }
-  stats.trendDailyByOrigin = formatCatTrend(dailyOriginMap); stats.trendDailyByTeam = formatCatTrend(dailyTeamMap); stats.trendDailyByProduct = formatCatTrend(dailyProductMap); stats.trendDailyByTypology = formatCatTrend(dailyTypologyMap); stats.trendDailyByTag = formatCatTrend(dailyTagMap);
+
+  // ✅ Now just calls — formatCatTrend was hoisted to the top
+  stats.trendDailyByOrigin = formatCatTrend(dailyOriginMap);
+  stats.trendDailyByTeam = formatCatTrend(dailyTeamMap);
+  stats.trendDailyByProduct = formatCatTrend(dailyProductMap);
+  stats.trendDailyByTypology = formatCatTrend(dailyTypologyMap);
+  stats.trendDailyByTag = formatCatTrend(dailyTagMap);
+
   Object.keys(dailyLlmMap).sort().forEach(function(k) { stats.trendDailyLlm.push(dailyLlmMap[k]); });
 
-  Object.keys(cycleWeeklyMap).sort().forEach(function(k) { var v = cycleWeeklyMap[k]; stats.cycleTimeTrendWeekly.push({ week: k, avgWorkToQc: v.w2qCnt > 0 ? +(v.w2qSum / v.w2qCnt).toFixed(1) : 0, avgQcToRca: v.q2rCnt > 0 ? +(v.q2rSum / v.q2rCnt).toFixed(1) : 0 }); });
-  Object.keys(histogramW2Q).sort(function(a, b) { return a - b; }).forEach(function(k) { stats.cycleHistogramW2Q.push({ label: k === '20' ? '20+' : k, count: histogramW2Q[k] }); });
-  Object.keys(histogramQ2R).sort(function(a, b) { return a - b; }).forEach(function(k) { stats.cycleHistogramQ2R.push({ label: k === '20' ? '20+' : k, count: histogramQ2R[k] }); });
-  Object.keys(analystStats).forEach(function(an) { var a = analystStats[an]; stats.analystMatrix.push({ name: an, count: a.count, avgScore: +(a.scoreSum / a.count).toFixed(2), avgCycle: a.cycleCnt > 0 ? +(a.cycleSum / a.cycleCnt).toFixed(1) : 0 }); });
-  Object.keys(heatmapData).sort().forEach(function(m) { var d = heatmapData[m]; stats.phaseHeatmap.push({ month: m, p2: d.total ? Math.round((d.p2 / d.total) * 100) : 0, p3: d.total ? Math.round((d.p3 / d.total) * 100) : 0, p4: d.total ? Math.round((d.p4 / d.total) * 100) : 0, p5: d.total ? Math.round((d.p5 / d.total) * 100) : 0, p6: d.total ? Math.round((d.p6 / d.total) * 100) : 0, p7: d.total ? Math.round((d.p7 / d.total) * 100) : 0 }); });
+  Object.keys(cycleWeeklyMap).sort().forEach(function(k) {
+    var v = cycleWeeklyMap[k];
+    stats.cycleTimeTrendWeekly.push({
+      week: k,
+      avgWorkToQc: v.w2qCnt > 0 ? +(v.w2qSum / v.w2qCnt).toFixed(1) : 0,
+      avgQcToRca: v.q2rCnt > 0 ? +(v.q2rSum / v.q2rCnt).toFixed(1) : 0
+    });
+  });
+
+  Object.keys(histogramW2Q).sort(function(a, b) { return a - b; }).forEach(function(k) {
+    stats.cycleHistogramW2Q.push({ label: k === '20' ? '20+' : k, count: histogramW2Q[k] });
+  });
+  Object.keys(histogramQ2R).sort(function(a, b) { return a - b; }).forEach(function(k) {
+    stats.cycleHistogramQ2R.push({ label: k === '20' ? '20+' : k, count: histogramQ2R[k] });
+  });
+
+  Object.keys(analystStats).forEach(function(an) {
+    var a = analystStats[an];
+    stats.analystMatrix.push({
+      name: an,
+      count: a.count,
+      avgScore: +(a.scoreSum / a.count).toFixed(2),
+      avgCycle: a.cycleCnt > 0 ? +(a.cycleSum / a.cycleCnt).toFixed(1) : 0
+    });
+  });
+
+  Object.keys(heatmapData).sort().forEach(function(m) {
+    var d = heatmapData[m];
+    stats.phaseHeatmap.push({
+      month: m,
+      p2: d.total ? Math.round((d.p2 / d.total) * 100) : 0,
+      p3: d.total ? Math.round((d.p3 / d.total) * 100) : 0,
+      p4: d.total ? Math.round((d.p4 / d.total) * 100) : 0,
+      p5: d.total ? Math.round((d.p5 / d.total) * 100) : 0,
+      p6: d.total ? Math.round((d.p6 / d.total) * 100) : 0,
+      p7: d.total ? Math.round((d.p7 / d.total) * 100) : 0
+    });
+  });
 
   var failureReasons = {};
-  Object.keys(stats.cascading).forEach(function(pkey) { Object.keys(stats.cascading[pkey]).forEach(function(reason) { 
-    var r = reason.toLowerCase(); if (r !== 'other' && r !== 'no' && r !== 'yes') { failureReasons[reason] = (failureReasons[reason] || 0) + stats.cascading[pkey][reason]; } 
-  }); });
-  var paretoArr = []; Object.keys(failureReasons).forEach(function(k) { paretoArr.push([k, failureReasons[k]]); });
-  paretoArr.sort(function(a, b) { return b[1] - a[1]; }); stats.paretoFailures = paretoArr;
+  Object.keys(stats.cascading).forEach(function(pkey) {
+    Object.keys(stats.cascading[pkey]).forEach(function(reason) {
+      var r = reason.toLowerCase();
+      if (r !== 'other' && r !== 'no' && r !== 'yes') {
+        failureReasons[reason] = (failureReasons[reason] || 0) + stats.cascading[pkey][reason];
+      }
+    });
+  });
+  var paretoArr = [];
+  Object.keys(failureReasons).forEach(function(k) { paretoArr.push([k, failureReasons[k]]); });
+  paretoArr.sort(function(a, b) { return b[1] - a[1]; });
+  stats.paretoFailures = paretoArr;
 
   if (stats.total > 0) {
     var agYes = stats.agreementBreakdown.yes, agNo = stats.agreementBreakdown.no;
-    stats.agreementRate = +((agYes / (agYes + agNo || 1)) * 100).toFixed(1); stats.avgDefectScore = +(defectSum / stats.total).toFixed(2);
-    stats.criticalRate = +((stats.criticalCount / stats.total) * 100).toFixed(1); stats.flagRate = +((stats.flagged.flagToTL / stats.total) * 100).toFixed(1); stats.appealRate = +((stats.flagged.toBeAppealed / stats.total) * 100).toFixed(1);
+    stats.agreementRate = +((agYes / (agYes + agNo || 1)) * 100).toFixed(1);
+    stats.avgDefectScore = +(defectSum / stats.total).toFixed(2);
+    stats.criticalRate = +((stats.criticalCount / stats.total) * 100).toFixed(1);
+    stats.flagRate = +((stats.flagged.flagToTL / stats.total) * 100).toFixed(1);
+    stats.appealRate = +((stats.flagged.toBeAppealed / stats.total) * 100).toFixed(1);
     stats.avgPerDay = +(stats.total / (Object.keys(dailyMap).length || 1)).toFixed(1);
   }
-  if (workToQcCount > 0) stats.cycleTime.avgWorkToQc = +(workToQcSum / workToQcCount).toFixed(1); if (qcToRcaCount > 0) stats.cycleTime.avgQcToRca = +(qcToRcaSum / qcToRcaCount).toFixed(1);
+
+  if (workToQcCount > 0) stats.cycleTime.avgWorkToQc = +(workToQcSum / workToQcCount).toFixed(1);
+  if (qcToRcaCount > 0) stats.cycleTime.avgQcToRca = +(qcToRcaSum / qcToRcaCount).toFixed(1);
 
   Object.keys(stats.phaseStats).forEach(function(phaseNum) {
-    var ph = stats.phaseStats[phaseNum]; ph.failRate = ph.total > 0 ? +(ph.fail / ph.total * 100).toFixed(1) : 0;
+    var ph = stats.phaseStats[phaseNum];
+    ph.failRate = ph.total > 0 ? +(ph.fail / ph.total * 100).toFixed(1) : 0;
     Object.keys(ph.questions).forEach(function(qKey) {
-      var qs = ph.questions[qKey]; qs.failRate = qs.total > 0 ? +(qs.fail / qs.total * 100).toFixed(1) : 0;
-      if (qs._reasons && Object.keys(qs._reasons).length) { var sorted = []; Object.keys(qs._reasons).forEach(function(rk) { sorted.push([rk, qs._reasons[rk]]); }); sorted.sort(function(a, b) { return b[1] - a[1]; }); qs.topReason = { reason: sorted[0][0], count: sorted[0][1] }; }
+      var qs = ph.questions[qKey];
+      qs.failRate = qs.total > 0 ? +(qs.fail / qs.total * 100).toFixed(1) : 0;
+      if (qs._reasons && Object.keys(qs._reasons).length) {
+        var sorted = [];
+        Object.keys(qs._reasons).forEach(function(rk) { sorted.push([rk, qs._reasons[rk]]); });
+        sorted.sort(function(a, b) { return b[1] - a[1]; });
+        qs.topReason = { reason: sorted[0][0], count: sorted[0][1] };
+      }
       delete qs._reasons;
     });
   });
