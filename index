@@ -312,17 +312,15 @@ window.toggleTheme=toggleTheme;
 function switchTab(tabId){
   try {
     currentTab = tabId; document.querySelectorAll('.analytics-tab').forEach(function(t){ t.classList.remove('active'); });
-    var d=$('dashboardView'), f=$('formView'), a=$('rcaAnalyticsView'); 
-    [d,f,a].forEach(function(v){ if(v) { v.classList.remove('show-view'); v.classList.add('hidden'); } }); 
-    document.body.classList.remove('form-open');
-    if (tabId === 'pending') { var tp = $('tabPending'); if(tp) tp.classList.add('active'); if(d) { d.classList.remove('hidden'); d.classList.add('show-view'); } startPendingPoller(); } 
-    else if (tabId === 'analytics') { var ta = $('tabRcaAnalytics'); if(ta) ta.classList.add('active'); if(a) { a.classList.remove('hidden'); a.classList.add('show-view'); } stopPendingPoller(); if (typeof window.loadRcaAnalytics === 'function') window.loadRcaAnalytics(); if (typeof window.__rcaResizeCharts === 'function') setTimeout(window.__rcaResizeCharts, 80); }
+    var d=$('dashboardView'), f=$('formView'), a=$('rcaAnalyticsView'); [d,f,a].forEach(function(v){ if(v) v.classList.remove('show-view'); }); document.body.classList.remove('form-open');
+    if (tabId === 'pending') { var tp = $('tabPending'); if(tp) tp.classList.add('active'); if(d) d.classList.add('show-view'); startPendingPoller(); } 
+    else if (tabId === 'analytics') { var ta = $('tabRcaAnalytics'); if(ta) ta.classList.add('active'); if(a) a.classList.add('show-view'); stopPendingPoller(); if (typeof window.loadRcaAnalytics === 'function') window.loadRcaAnalytics(); if (typeof window.__rcaResizeCharts === 'function') setTimeout(window.__rcaResizeCharts, 80); }
   } catch(e) { console.error('switchTab:', e); }
 }
 function startPendingPoller(){ stopPendingPoller(); window._pendingPoller = setInterval(function(){ if (currentTab === 'pending' && !document.hidden) loadCases(true); }, 30000); }
 function stopPendingPoller(){ if (window._pendingPoller) { clearInterval(window._pendingPoller); window._pendingPoller = null; } }
-function showForm(){ try{ var d=$('dashboardView'), f=$('formView'), a=$('rcaAnalyticsView'); [d,a].forEach(function(v){ if(v) { v.classList.remove('show-view'); v.classList.add('hidden'); } }); if(f) { f.classList.remove('hidden'); f.classList.add('show-view'); } document.body.classList.add('form-open'); window.scrollTo(0,0); }catch(e){} }
-function returnToQueue(){ try{ if(currentCaseId){ google.script.run.unlockCase(currentCaseId); currentCaseId=null; } if(_lockRefreshTimer){ clearInterval(_lockRefreshTimer); _lockRefreshTimer=null; } var f=$('formView'), d=$('dashboardView'); if(f) { f.classList.remove('show-view'); f.classList.add('hidden'); } if(d) { d.classList.remove('hidden'); d.classList.add('show-view'); } document.body.classList.remove('form-open'); loadCases(true); }catch(e){} }
+function showForm(){ try{ var d=$('dashboardView'), f=$('formView'), a=$('rcaAnalyticsView'); if(d) d.classList.remove('show-view'); if(a) a.classList.remove('show-view'); if(f) f.classList.add('show-view'); document.body.classList.add('form-open'); window.scrollTo(0,0); }catch(e){} }
+function returnToQueue(){ try{ if(currentCaseId){ google.script.run.unlockCase(currentCaseId); currentCaseId=null; } if(_lockRefreshTimer){ clearInterval(_lockRefreshTimer); _lockRefreshTimer=null; } var f=$('formView'), d=$('dashboardView'); if(f) f.classList.remove('show-view'); if(d) d.classList.add('show-view'); document.body.classList.remove('form-open'); loadCases(true); }catch(e){} }
 window.switchTab=switchTab; window.showForm=showForm; window.returnToQueue=returnToQueue;
 
 function showToast(o){ try{ o=o||{}; var c=$('toastContainer'); if(!c) return; var t=document.createElement('div'); t.className='toast toast-'+(o.type||'info'); var html='<div style="flex:1;"><div class="toast-title">'+escapeHtml(o.title||'')+'</div>'+(o.description?'<div class="toast-desc">'+escapeHtml(o.description)+'</div>':'')+'</div><button class="btn btn-ghost btn-sm" onclick="this.parentElement.remove()">&times;</button>'; t.innerHTML=html; c.appendChild(t); setTimeout(function(){try{t.remove();}catch(_){}}, o.duration||4000); }catch(e){} }
@@ -443,7 +441,7 @@ async function executeRcaSubmission(){
       p5Decision: val('p5Decision'), p5ActionError: val('p5ActionError'), p5Juris: val('p5Juris'), p5JurisTxt: val('p5JurisTxt'), p5Excep: val('p5Excep'), p5ExcepTxt: val('p5ExcepTxt'), p5Biz: val('p5Biz'), p5BizTxt: val('p5BizTxt'), p5LlmOutput: val('p5LlmOutput'), p5LlmFail: val('p5LlmFail'),
       p6Edd: val('p6Edd'), p6EddTxt: val('p6EddTxt'), p6Juris: val('p6Juris'), p6JurisTxt: val('p6JurisTxt'), p6Template: val('p6Template'), p6TemplateTxt: val('p6TemplateTxt'), p6Dante: val('p6Dante'), p6DanteTxt: val('p6DanteTxt'), p6Tags: val('p6Tags'), p6TagsTxt: val('p6TagsTxt'), p6Alerts: val('p6Alerts'), p6AlertsTxt: val('p6AlertsTxt'), p6Offboard: val('p6Offboard'), p6OffboardTxt: val('p6OffboardTxt'), p6Suspects: val('p6Suspects'), p6SuspectsTxt: val('p6SuspectsTxt'), p6Refunds: val('p6Refunds'), p6RefundsTxt: val('p6RefundsTxt'), p6LlmOutput: val('p6LlmOutput'), p6LlmFail: val('p6LlmFail'),
       p7Vague: val('p7Vague'), p7BrokenStrings: val('p7BrokenStrings'), p7UpstreamFlags: val('p7UpstreamFlags'), p7ExtEnquiry: val('p7ExtEnquiry'),
-      taskTypeMatch: val('taskTypeMatch'), correctTaskType: val('correctTaskType), rcaOutcome: val('rcaOutcome'), negativeImpact: val('negativeImpact'),
+      taskTypeMatch: val('taskTypeMatch'), correctTaskType: val('correctTaskType'), rcaOutcome: val('rcaOutcome'), negativeImpact: val('negativeImpact'),
       rcaSysFail: val('rcaSysFail'), rcaSysFailTxt: val('rcaSysFailTxt'), rcaAgree: val('rcaAgree'), errorSource: val('errorSource'), rcaUpdate: val('suggestedUpdate'), rcaComments: val('rcaComments'),
       flagToTL: safeGetChecked('flagToTL'), toBeAppealed: safeGetChecked('toBeAppealed'), failAccepted: safeGetChecked('failAccepted'), remediationStatus: val('remediationStatus'), remediationDisagreement: val('remediationDisagreement'),
       lob: safeGet('h_lob'), empEmail: safeGet('h_empEmail'), entityRegion: safeGet('h_entityRegion'), batchId: safeGet('h_batchId'), lmEmail: safeGet('h_lmEmail'), recs: safeGet('h_recs'), boLink: safeGet('h_boLink'), qcLink: safeGet('h_qcLink'),
@@ -457,9 +455,7 @@ async function executeRcaSubmission(){
       if (res && res.success) { setConn('online', 'Live'); var f = $('rcaForm'); if (f) f.classList.add('hidden'); var sm = $('successMsg'); if (sm) sm.classList.remove('hidden'); currentCaseId = null; if (_lockRefreshTimer) { clearInterval(_lockRefreshTimer); _lockRefreshTimer = null; } showToast({ title: 'RCA submitted', type: 'success' }); } 
       else { setConn('offline', 'Error'); showToast({ title: 'Submission failed', description: (res && res.error) || 'Unknown', type: 'error' }); }
     }).withFailureHandler(function(err) { setConn('offline', 'Error'); showToast({ title: 'Server error', description: err.message, type: 'error' }); }).submitRCA(p);
-  } catch(e) { 
-    setConn('offline', 'Error'); showToast({ title: 'Submit error', description: e.message, type: 'error' }); 
-  }
+  } catch(e) { setConn('offline', 'Error'); showToast({ title: 'Submit error', description: e.message, type: 'error' }); }
 }
 
 window.investigateCase=investigateCase; window.populateRcaForm=populateRcaForm; window.initTomSelects=initTomSelects; window.toggleBox=toggleBox; window.toggleRcaLogic=toggleRcaLogic; window.toggleActionDrawer=toggleActionDrawer; window.updateActionBadge=updateActionBadge; window.aiSearch=aiSearch; window.buildAuQuestions=buildAuQuestions; window.calculateRefund=calculateRefund; window.generateComments=generateComments; window.scanStatement=scanStatement; window.executeRcaSubmission=executeRcaSubmission; window.showToast=showToast; window.showModal=showModal;
