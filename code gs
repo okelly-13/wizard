@@ -3,7 +3,17 @@
 // ============================================================
 
 function doGet(e) {
-  return HtmlService.createTemplateFromFile('Index')
+  var template;
+  try {
+    template = HtmlService.createTemplateFromFile('Index');
+  } catch (err) {
+    try {
+      template = HtmlService.createTemplateFromFile('index');
+    } catch (err2) {
+      template = HtmlService.createTemplateFromFile('INDEX');
+    }
+  }
+  return template
     .evaluate()
     .setTitle('FIU RCA Wizard')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
@@ -11,7 +21,15 @@ function doGet(e) {
 
 function include(filename) {
   try { return HtmlService.createHtmlOutputFromFile(filename).getContent(); } 
-  catch (e) { return '<!-- Error including ' + filename + ': ' + e.message + ' -->'; }
+  catch (e) {
+    try { return HtmlService.createHtmlOutputFromFile(filename.toLowerCase()).getContent(); }
+    catch (e2) {
+      try { return HtmlService.createHtmlOutputFromFile(filename.toUpperCase()).getContent(); }
+      catch (e3) {
+        return '<!-- Error including ' + filename + ': ' + e.message + ' -->';
+      }
+    }
+  }
 }
 
 // ============================================================
