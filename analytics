@@ -271,7 +271,7 @@
   }
 
   function chartBaseOpts({ yLabel, noData, noDataMsg } = {}) {
-    return { responsive: true, maintainAspectRatio: false, animation: { duration: 250 }, plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false }, ...(noData && { title: { display: true, text: noDataMsg || 'No data', color: cssVar('--chart-gray') } }) }, scales: { x: { grid: { display: false }, ticks: { color: cssVar('--chart-tick'), maxRotation: 0, autoSkip: true, maxTicksLimit: 12 } }, y: { beginAtZero: true, ticks: { color: cssVar(--chart-tick'), precision: 0 }, grid: { color: cssVar('--chart-grid') }, title: yLabel ? { display: true, text: yLabel, color: cssVar('--chart-tick') } : undefined } } };
+    return { responsive: true, maintainAspectRatio: false, animation: { duration: 250 }, plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false }, ...(noData && { title: { display: true, text: noDataMsg || 'No data', color: cssVar('--chart-gray') } }) }, scales: { x: { grid: { display: false }, ticks: { color: cssVar('--chart-tick'), maxRotation: 0, autoSkip: true, maxTicksLimit: 12 } }, y: { beginAtZero: true, ticks: { color: cssVar('--chart-tick'), precision: 0 }, grid: { color: cssVar('--chart-grid') }, title: yLabel ? { display: true, text: yLabel, color: cssVar('--chart-tick') } : undefined } } };
   }
 
   function renderTrendChart(a) {
